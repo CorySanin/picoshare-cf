@@ -238,12 +238,12 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 		return picoshare.EntryID(""), errors.New("file is empty")
 	}
 
-	filename, err := parse.Filename(metadata.Filename)
+	filename, err := parse.Filename(r.FormValue("filename"))
 	if err != nil {
 		return picoshare.EntryID(""), err
 	}
 
-	contentType, err := parseContentType(metadata.Header.Get("Content-Type"))
+	contentType, err := parseContentType(r.FormValue("contentType"))
 	if err != nil {
 		return picoshare.EntryID(""), err
 	}
@@ -257,8 +257,22 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 		return picoshare.EntryID(""), errors.New("guest uploads cannot have file notes")
 	}
 
-	id := generateEntryID()
-	err = s.getDB(r).InsertEntry(reader,
+	id := picoshare.EntryID(r.FormValue("id"))
+	if id.String() == "" {
+		id = generateEntryID()
+	}
+
+	err = s.getDB(r).UploadChunk(reader, id)
+	if err != nil {
+		log.Printf("failed to save chunk: %v", err)
+		return picoshare.EntryID(""), dbError{err}
+	}
+
+	if r.FormValue("last") == "0" {
+		return id, nil
+	}
+
+	err = s.getDB(r).InsertChunkedEntry(reader,
 		picoshare.UploadMetadata{
 			ID:          id,
 			Filename:    filename,

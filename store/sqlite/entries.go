@@ -179,7 +179,7 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 	// Purge().
 	// See: https://github.com/mtlynch/picoshare/issues/284
 
-	w := file.NewWriter(s.ctx, metadata.ID, s.chunkSize)
+	w := file.NewWriter(s.ctx, metadata.ID, s.chunkSize, 0)
 	if _, err := io.Copy(w, reader); err != nil {
 		return err
 	}
@@ -212,6 +212,61 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 	)
 	if err != nil {
 		log.Printf("insert into entries table failed, aborting transaction: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s Store) InsertChunkedEntry(reader io.Reader, metadata picoshare.UploadMetadata) error {
+	log.Printf("saving new entry %s", metadata.ID)
+
+	_, err := s.ctx.Exec(`
+	INSERT INTO
+		entries
+	(
+		id,
+		guest_link_id,
+		filename,
+		note,
+		content_type,
+		upload_time,
+		expiration_time
+	)
+	VALUES(:entry_id, :guest_link_id, :filename, :note, :content_type, :upload_time, :expiration_time)`,
+		sql.Named("entry_id", metadata.ID),
+		sql.Named("guest_link_id", metadata.GuestLink.ID),
+		sql.Named("filename", metadata.Filename),
+		sql.Named("note", metadata.Note.Value),
+		sql.Named("content_type", metadata.ContentType),
+		sql.Named("upload_time", formatTime(metadata.Uploaded)),
+		sql.Named("expiration_time", formatExpirationTime(metadata.Expires)),
+	)
+	if err != nil {
+		log.Printf("insert into entries table failed, aborting transaction: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (s Store) UploadChunk(reader io.Reader, id picoshare.EntryID) error {
+	log.Printf("Uploading chunk for %s", id)
+
+	offset := 0
+	rows, err := s.ctx.Query("SELECT chunk_index FROM entries_data WHERE id = ? ORDER BY chunk_index DESC LIMIT 1", id)
+	if err == nil && rows.Next() {
+		rows.Scan(&offset)
+		offset++
+	}
+
+	w := file.NewWriter(s.ctx, id, s.chunkSize, offset)
+	if _, err := io.Copy(w, reader); err != nil {
+		return err
+	}
+
+	// Close() flushes the buffer, and it can fail.
+	if err := w.Close(); err != nil {
 		return err
 	}
 

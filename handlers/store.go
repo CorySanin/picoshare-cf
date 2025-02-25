@@ -11,6 +11,8 @@ type Store interface {
 	GetEntry(id picoshare.EntryID) (picoshare.UploadEntry, error)
 	GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata, error)
 	InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) error
+	UploadChunk(reader io.Reader, id picoshare.EntryID) error
+	InsertChunkedEntry(reader io.Reader, metadata picoshare.UploadMetadata) error
 	UpdateEntryMetadata(id picoshare.EntryID, metadata picoshare.UploadMetadata) error
 	DeleteEntry(id picoshare.EntryID) error
 	GetGuestLink(picoshare.GuestLinkID) (picoshare.GuestLink, error)

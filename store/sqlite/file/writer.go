@@ -12,15 +12,17 @@ type writer struct {
 	entryID picoshare.EntryID
 	buf     []byte
 	written int
+	offset  int
 }
 
 // Create a new writer for the entry ID using the given SqlTx and splitting the
 // file into separate rows in the DB of at most chunkSize bytes.
-func NewWriter(ctx wrapped.SqlDB, id picoshare.EntryID, chunkSize int) io.WriteCloser {
+func NewWriter(ctx wrapped.SqlDB, id picoshare.EntryID, chunkSize int, offset int) io.WriteCloser {
 	return &writer{
 		ctx:     ctx,
 		entryID: id,
 		buf:     make([]byte, chunkSize),
+		offset:  offset,
 	}
 }
 
@@ -57,7 +59,7 @@ func (w *writer) Close() error {
 }
 
 func (w *writer) flush(n int) error {
-	idx := w.written / len(w.buf)
+	idx := w.written/len(w.buf) + w.offset
 	_, err := w.ctx.Exec(`
 	INSERT INTO
 		entries_data

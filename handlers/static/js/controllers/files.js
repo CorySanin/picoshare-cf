@@ -1,6 +1,58 @@
 "use strict";
 
-function uploadFormData(url, formData, progressFn) {
+async function uploadFormData(url, formData, progressFn) {
+  const CHUNK_SIZE = 32768 * 10; // sqlite.go:defaultChunkSize
+  const file = formData.get("file");
+  const note = formData.get('note')
+  const totalSize = file.size;
+  const splits = Math.ceil(file.size / CHUNK_SIZE);
+  let uploaded = 0;
+  let id;
+
+  for (const [i, _] of [...Array(splits)].entries()) {
+    const start = i * CHUNK_SIZE;
+    const chunk = file.slice(start, start + CHUNK_SIZE);
+    const chunkData = new FormData();
+    chunkData.append("file", chunk);
+    chunkData.append("filename", file.name);
+    chunkData.append("contentType", file.type);
+    chunkData.append("last", i === splits - 1 ? "1" : "0");
+    if (note) {
+      chunkData.append("note", note);
+    }
+    if (id) {
+      chunkData.append("id", id);
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      body: chunkData,
+      headers: { "Accept": "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    uploaded += chunk.size;
+    if (progressFn) {
+      progressFn(uploaded, totalSize);
+    }
+    if (start > 0 && uploaded !== totalSize) {
+      continue;
+    }
+    const data = await response.json();
+    if (uploaded === totalSize) {
+      return data;
+    }
+    if (!('id' in data) || data.id === '') {
+      throw new Error("Missing expected id field");
+    }
+    id = data.id;
+  }
+}
+
+function uploadFormDataXHR(url, formData, progressFn) {
   return new Promise((resolve, reject) => {
     // We have to use XHR instead of fetch because fetch currently doesn't
     // support a mechanism for reporting upload progress.
