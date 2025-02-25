@@ -49,10 +49,17 @@ func (s Server) entryGet() http.HandlerFunc {
 
 		http.ServeContent(w, r, string(entry.Filename), entry.Uploaded, entry.Reader)
 
-		if err := recordDownload(s.getDB(r), entry.ID, s.clock.Now(), r.RemoteAddr, r.Header.Get("User-Agent")); err != nil {
+		if err := recordDownload(s.getDB(r), entry.ID, s.clock.Now(), getIpAddress(r), r.Header.Get("User-Agent")); err != nil {
 			log.Printf("failed to record download of file %s: %v", id.String(), err)
 		}
 	}
+}
+
+func getIpAddress(r *http.Request) string {
+	if value := r.Header.Get("CF-Connecting-IP"); value != "" {
+		return value
+	}
+	return r.RemoteAddr
 }
 
 func inferContentTypeFromFilename(f picoshare.Filename) (picoshare.ContentType, error) {
