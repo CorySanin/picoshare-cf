@@ -2,6 +2,7 @@
 
 [![GitHub Action](https://img.shields.io/github/actions/workflow/status/CorySanin/picoshare-cf/docker.yml)](https://github.com/CorySanin/picoshare-cf/actions/workflows/docker.yml)
 [![GitHub Tag](https://img.shields.io/github/v/tag/CorySanin/picoshare-cf)](https://github.com/CorySanin/picoshare-cf/releases/latest)
+[![Docker Pulls](https://img.shields.io/docker/pulls/corysanin/picoshare-cf)](https://hub.docker.com/r/corysanin/picoshare-cf)
 [![License](https://img.shields.io/badge/license-agpl-blue)](https://github.com/CorySanin/picoshare-cf/blob/master/LICENSE)
 
 This is a fork of [PicoShare](https://github.com/mtlynch/picoshare) with modifications that suit CloudFlare customers, including free tier.
