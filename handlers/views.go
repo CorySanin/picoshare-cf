@@ -80,15 +80,12 @@ func (s Server) guestLinkIndexGet() http.HandlerFunc {
 				return "Never"
 			}
 			t := time.Time(et)
-			delta := time.Until(t)
+			delta := t.Sub(s.clock.Now())
 			suffix := ""
 			if delta.Seconds() < 0 {
 				suffix = " ago"
 			}
 			return fmt.Sprintf("%s (%.0f days%s)", t.Format(time.DateOnly), math.Abs(delta.Hours())/24, suffix)
-		},
-		"isActive": func(gl picoshare.GuestLink) bool {
-			return gl.IsActive()
 		},
 	}
 
@@ -176,9 +173,10 @@ func (s Server) fileIndexGet() http.HandlerFunc {
 			if et == picoshare.NeverExpire {
 				return "Never"
 			}
-			t := time.Time(et)
-			delta := time.Until(t)
-			return fmt.Sprintf("%s (%.0f days)", t.Format(time.DateOnly), delta.Hours()/24)
+			t := et.Time().Local()
+			delta := t.Sub(s.clock.Now())
+			daysRemaining := delta.Hours() / 24
+			return fmt.Sprintf("%s (%.0f days)", t.Format(time.DateOnly), daysRemaining)
 		},
 		"formatFileSize": humanReadableFileSize,
 	}
@@ -262,9 +260,10 @@ func (s Server) fileInfoGet() http.HandlerFunc {
 			if et == picoshare.NeverExpire {
 				return "Never"
 			}
-			t := time.Time(et)
-			delta := time.Until(t)
-			return fmt.Sprintf("%s (%.0f days)", t.Format(time.DateOnly), delta.Hours()/24)
+			t := et.Time().Local()
+			delta := t.Sub(s.clock.Now())
+			daysRemaining := delta.Hours() / 24
+			return fmt.Sprintf("%s (%.0f days)", t.Format(time.DateOnly), daysRemaining)
 		},
 		"formatTimestamp": func(t time.Time) string {
 			return t.Format(time.RFC3339)
@@ -356,6 +355,22 @@ func (s Server) fileDownloadsGet() http.HandlerFunc {
 			return
 		}
 
+		showUniqueOnly := r.URL.Query().Get("unique") == "true"
+
+		filteredDownloads := downloads
+		if showUniqueOnly {
+			seen := make(map[string]bool)
+			var uniqueDownloads []picoshare.DownloadRecord
+
+			for _, download := range downloads {
+				if !seen[download.ClientIP] {
+					seen[download.ClientIP] = true
+					uniqueDownloads = append(uniqueDownloads, download)
+				}
+			}
+			filteredDownloads = uniqueDownloads
+		}
+
 		// Convert raw downloads to display-friendly information.
 		type downloadRecord struct {
 			Time     time.Time
@@ -363,8 +378,8 @@ func (s Server) fileDownloadsGet() http.HandlerFunc {
 			Browser  string
 			Platform string
 		}
-		records := make([]downloadRecord, len(downloads))
-		for i, d := range downloads {
+		records := make([]downloadRecord, len(filteredDownloads))
+		for i, d := range filteredDownloads {
 			agent := useragent.Parse(d.UserAgent)
 			records[i] = downloadRecord{
 				Time:     d.Time,
@@ -376,12 +391,14 @@ func (s Server) fileDownloadsGet() http.HandlerFunc {
 
 		if err := t.Execute(w, struct {
 			commonProps
-			Metadata  picoshare.UploadMetadata
-			Downloads []downloadRecord
+			Metadata       picoshare.UploadMetadata
+			Downloads      []downloadRecord
+			ShowUniqueOnly bool
 		}{
-			commonProps: makeCommonProps("PicoShare-CF | Downloads", r.Context()),
-			Metadata:    metadata,
-			Downloads:   records,
+			commonProps:    makeCommonProps("PicoShare-CF | Downloads", r.Context()),
+			Metadata:       metadata,
+			Downloads:      records,
+			ShowUniqueOnly: showUniqueOnly,
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -570,12 +587,63 @@ func (s Server) guestUploadGet() http.HandlerFunc {
 			return
 		}
 
+		// Generate expiration options up to the guest link's maximum file lifetime.
+		type lifetimeOption struct {
+			Lifetime  picoshare.FileLifetime
+			IsDefault bool
+		}
+		type expirationOption struct {
+			FriendlyName string
+			Expiration   time.Time
+			IsDefault    bool
+		}
+
+		baseLifetimeOptions := []lifetimeOption{
+			{picoshare.NewFileLifetimeInDays(1), false},
+			{picoshare.NewFileLifetimeInDays(7), false},
+			{picoshare.NewFileLifetimeInDays(30), false},
+			{picoshare.NewFileLifetimeInYears(1), false},
+			{picoshare.FileLifetimeInfinite, false},
+		}
+
+		// Filter options to only include those within the guest link's maximum.
+		validLifetimeOptions := []lifetimeOption{}
+		for _, lto := range baseLifetimeOptions {
+			if lto.Lifetime.Days() <= gl.MaxFileLifetime.Days() {
+				validLifetimeOptions = append(validLifetimeOptions, lto)
+			}
+		}
+
+		// Mark the guest link's file lifetime as the default.
+		for i, lto := range validLifetimeOptions {
+			if lto.Lifetime.Equal(gl.MaxFileLifetime) {
+				validLifetimeOptions[i].IsDefault = true
+				break
+			}
+		}
+
+		// Convert to expiration options.
+		expirationOptions := []expirationOption{}
+		for _, lto := range validLifetimeOptions {
+			friendlyName := lto.Lifetime.FriendlyName()
+			expiration := lto.Lifetime.ExpirationFromTime(s.clock.Now())
+			if lto.Lifetime.Equal(picoshare.FileLifetimeInfinite) {
+				expiration = picoshare.NeverExpire
+			}
+			expirationOptions = append(expirationOptions, expirationOption{
+				FriendlyName: friendlyName,
+				Expiration:   expiration.Time(),
+				IsDefault:    lto.IsDefault,
+			})
+		}
+
 		if err := t.Execute(w, struct {
 			commonProps
-			ExpirationOptions []interface{}
+			ExpirationOptions []expirationOption
 			GuestLinkMetadata picoshare.GuestLink
 		}{
 			commonProps:       makeCommonProps("PicoShare-CF | Upload", r.Context()),
+			ExpirationOptions: expirationOptions,
 			GuestLinkMetadata: gl,
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -627,7 +695,7 @@ func (s Server) settingsGet() http.HandlerFunc {
 
 func (s Server) systemInformationGet() http.HandlerFunc {
 	fns := template.FuncMap{
-		"formatFileSize": humanReadableFileSize,
+		"formatDiskUsage": humanReadableDiskUsage,
 		"percentage": func(part, total uint64) string {
 			return fmt.Sprintf("%.0f%%", 100.0*(float64(part)/float64(total)))
 		},
@@ -665,7 +733,11 @@ func (s Server) systemInformationGet() http.HandlerFunc {
 	}
 }
 
-func humanReadableFileSize(b uint64) string {
+func humanReadableFileSize(fileSize picoshare.FileSize) string {
+	return humanReadableDiskUsage(fileSize.UInt64())
+}
+
+func humanReadableDiskUsage(b uint64) string {
 	const unit = 1024
 
 	if b < unit {

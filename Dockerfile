@@ -1,4 +1,4 @@
-FROM golang:1.23.3 AS builder
+FROM golang:1.24.0 AS builder
 
 ARG TARGETPLATFORM
 ARG PS_VERSION
@@ -20,7 +20,7 @@ RUN TARGETPLATFORM="${TARGETPLATFORM}" \
     PS_VERSION="${PS_VERSION}" \
     ./dev-scripts/build-backend "prod"
 
-FROM scratch as artifact
+FROM scratch AS artifact
 COPY --from=builder /app/bin/picoshare ./
 
 FROM debian:stable-20240311-slim AS litestream_downloader

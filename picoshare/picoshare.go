@@ -22,7 +22,7 @@ type (
 		ContentType   ContentType
 		Uploaded      time.Time
 		Expires       ExpirationTime
-		Size          uint64
+		Size          FileSize
 		GuestLink     GuestLink
 		DownloadCount uint64
 	}
@@ -48,6 +48,10 @@ func (id EntryID) String() string {
 
 func (f Filename) String() string {
 	return string(f)
+}
+
+func (ct ContentType) String() string {
+	return string(ct)
 }
 
 func (et ExpirationTime) String() string {

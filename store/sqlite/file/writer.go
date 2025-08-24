@@ -17,7 +17,7 @@ type writer struct {
 
 // Create a new writer for the entry ID using the given SqlTx and splitting the
 // file into separate rows in the DB of at most chunkSize bytes.
-func NewWriter(ctx wrapped.SqlDB, id picoshare.EntryID, chunkSize int, offset int) io.WriteCloser {
+func NewWriter(ctx wrapped.SqlDB, id picoshare.EntryID, chunkSize uint64, offset int) io.WriteCloser {
 	return &writer{
 		ctx:     ctx,
 		entryID: id,
@@ -29,6 +29,13 @@ func NewWriter(ctx wrapped.SqlDB, id picoshare.EntryID, chunkSize int, offset in
 // Write writes a buffer to the SQLite database.
 func (w *writer) Write(p []byte) (int, error) {
 	n := 0
+
+	min := func(a, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}
 
 	for {
 		if n == len(p) {

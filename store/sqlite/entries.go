@@ -20,8 +20,7 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 		entries.content_type AS content_type,
 		entries.upload_time AS upload_time,
 		entries.expiration_time AS expiration_time,
-		sizes.file_size AS file_size,
-		IFNULL(downloads.download_count, 0) AS download_count
+		sizes.file_size AS file_size
 	FROM
 		entries
 	INNER JOIN
@@ -33,17 +32,7 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 				entries_data
 			GROUP BY
 				id
-		) sizes ON entries.id = sizes.id
-	LEFT OUTER JOIN
-		(
-			SELECT
-				entry_id,
-				COUNT (entry_id) as download_count
-			FROM
-				downloads
-			GROUP BY
-				entry_id
-		) downloads ON entries.id = downloads.entry_id`)
+		) sizes ON entries.id = sizes.id`)
 	if err != nil {
 		return []picoshare.UploadMetadata{}, err
 	}
@@ -56,9 +45,8 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 		var contentType string
 		var uploadTimeRaw string
 		var expirationTimeRaw string
-		var fileSize uint64
-		var downloadCount uint64
-		if err = rows.Scan(&id, &filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &fileSize, &downloadCount); err != nil {
+		var fileSizeRaw uint64
+		if err = rows.Scan(&id, &filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &fileSizeRaw); err != nil {
 			return []picoshare.UploadMetadata{}, err
 		}
 
@@ -72,36 +60,32 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 			return []picoshare.UploadMetadata{}, err
 		}
 
+		fileSize, err := picoshare.FileSizeFromUint64(fileSizeRaw)
+		if err != nil {
+			return []picoshare.UploadMetadata{}, err
+		}
+
 		ee = append(ee, picoshare.UploadMetadata{
-			ID:            picoshare.EntryID(id),
-			Filename:      picoshare.Filename(filename),
-			Note:          picoshare.FileNote{Value: note},
-			ContentType:   picoshare.ContentType(contentType),
-			Uploaded:      ut,
-			Expires:       picoshare.ExpirationTime(et),
-			Size:          fileSize,
-			DownloadCount: downloadCount,
+			ID:          picoshare.EntryID(id),
+			Filename:    picoshare.Filename(filename),
+			Note:        picoshare.FileNote{Value: note},
+			ContentType: picoshare.ContentType(contentType),
+			Uploaded:    ut,
+			Expires:     picoshare.ExpirationTime(et),
+			Size:        fileSize,
 		})
 	}
 
 	return ee, nil
 }
 
-func (s Store) GetEntry(id picoshare.EntryID) (picoshare.UploadEntry, error) {
-	metadata, err := s.GetEntryMetadata(id)
-	if err != nil {
-		return picoshare.UploadEntry{}, err
-	}
-
+func (s Store) ReadEntryFile(id picoshare.EntryID) (io.ReadSeeker, error) {
 	r, err := file.NewReader(s.ctx, id)
 	if err != nil {
-		return picoshare.UploadEntry{}, err
+		return nil, err
 	}
 
-	return picoshare.UploadEntry{
-		UploadMetadata: metadata,
-		Reader:         r,
-	}, nil
+	return r, nil
 }
 
 func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata, error) {
@@ -110,7 +94,7 @@ func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata,
 	var contentType string
 	var uploadTimeRaw string
 	var expirationTimeRaw string
-	var fileSize uint64
+	var fileSizeRaw uint64
 	var guestLinkID *picoshare.GuestLinkID
 	err := s.ctx.QueryRow(`
 	SELECT
@@ -134,7 +118,7 @@ func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata,
 				id
 		) sizes ON entries.id = sizes.id
 	WHERE
-		entries.id = :entry_id`, sql.Named("entry_id", id)).Scan(&filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &fileSize, &guestLinkID)
+		entries.id = :entry_id`, sql.Named("entry_id", id)).Scan(&filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &fileSizeRaw, &guestLinkID)
 	if err == sql.ErrNoRows {
 		return picoshare.UploadMetadata{}, store.EntryNotFoundError{ID: id}
 	} else if err != nil {
@@ -159,6 +143,11 @@ func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata,
 		return picoshare.UploadMetadata{}, err
 	}
 
+	fileSize, err := picoshare.FileSizeFromUint64(fileSizeRaw)
+	if err != nil {
+		return picoshare.UploadMetadata{}, err
+	}
+
 	return picoshare.UploadMetadata{
 		ID:          id,
 		Filename:    picoshare.Filename(filename),
@@ -178,7 +167,6 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 	// we can end up in a state with orphaned entries data. We clean it up in
 	// Purge().
 	// See: https://github.com/mtlynch/picoshare/issues/284
-
 	w := file.NewWriter(s.ctx, metadata.ID, s.chunkSize, 0)
 	if _, err := io.Copy(w, reader); err != nil {
 		return err
@@ -201,7 +189,7 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 		upload_time,
 		expiration_time
 	)
-	VALUES(:entry_id, :guest_link_id, :filename, :note, :content_type, :upload_time, :expiration_time)`,
+	VALUES(:entry_id, NULLIF(:guest_link_id, ''), :filename, :note, :content_type, :upload_time, :expiration_time)`,
 		sql.Named("entry_id", metadata.ID),
 		sql.Named("guest_link_id", metadata.GuestLink.ID),
 		sql.Named("filename", metadata.Filename),
@@ -311,12 +299,18 @@ func (s Store) DeleteEntry(id picoshare.EntryID) error {
 		return err
 	}
 
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			log.Printf("failed to rollback delete entry: %v", err)
+		}
+	}()
+
 	if _, err := tx.Exec(`
 	DELETE FROM
-		entries
+		downloads
 	WHERE
-		id = :entry_id`, sql.Named("entry_id", id)); err != nil {
-		log.Printf("delete from entries table failed, aborting transaction: %v", err)
+		entry_id = :entry_id`, sql.Named("entry_id", id)); err != nil {
+		log.Printf("delete from downloads table failed, aborting transaction: %v", err)
 		return err
 	}
 
@@ -326,6 +320,15 @@ func (s Store) DeleteEntry(id picoshare.EntryID) error {
 	WHERE
 		id = :entry_id`, sql.Named("entry_id", id)); err != nil {
 		log.Printf("delete from entries_data table failed, aborting transaction: %v", err)
+		return err
+	}
+
+	if _, err := tx.Exec(`
+	DELETE FROM
+		entries
+	WHERE
+		id = :entry_id`, sql.Named("entry_id", id)); err != nil {
+		log.Printf("delete from entries table failed, aborting transaction: %v", err)
 		return err
 	}
 
