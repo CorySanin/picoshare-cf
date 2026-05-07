@@ -103,7 +103,7 @@ export async function uploadFile(file, expirationTime, note, progressFn) {
     formData.append("note", note);
   }
   return uploadFormData(
-    `/api/entry?expiration=${encodeURIComponent(expirationTime)}`,
+    `/api/entry-chunk?expiration=${encodeURIComponent(expirationTime)}`,
     formData,
     progressFn
   );
@@ -118,7 +118,7 @@ export async function guestUploadFile(
   const formData = new FormData();
   formData.append("file", file);
   return uploadFormData(
-    `/api/guest/${guestLinkID}?expiration=${encodeURIComponent(
+    `/api/guest-chunk/${guestLinkID}?expiration=${encodeURIComponent(
       expirationTime
     )}`,
     formData,

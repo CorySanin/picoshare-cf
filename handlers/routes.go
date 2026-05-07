@@ -9,7 +9,8 @@ func (s *Server) routes() {
 
 	authenticatedApis := s.router.PathPrefix("/api").Subrouter()
 	authenticatedApis.Use(s.requireAuthentication)
-	authenticatedApis.HandleFunc("/entry", s.entryPost()).Methods(http.MethodPost)
+	authenticatedApis.HandleFunc("/entry", s.entryPost(false)).Methods(http.MethodPost)
+	authenticatedApis.HandleFunc("/entry-chunk", s.entryPost(true)).Methods(http.MethodPost)
 	authenticatedApis.HandleFunc("/entry/{id}", s.entryPut()).Methods(http.MethodPut)
 	authenticatedApis.HandleFunc("/entry/{id}", s.entryDelete()).Methods(http.MethodDelete)
 	authenticatedApis.HandleFunc("/guest-links", s.guestLinksPost()).Methods(http.MethodPost)
@@ -19,7 +20,8 @@ func (s *Server) routes() {
 	authenticatedApis.HandleFunc("/settings", s.settingsPut()).Methods(http.MethodPut)
 
 	publicApis := s.router.PathPrefix("/api").Subrouter()
-	publicApis.HandleFunc("/guest/{guestLinkID}", s.guestEntryPost()).Methods(http.MethodPost)
+	publicApis.HandleFunc("/guest/{guestLinkID}", s.guestEntryPost(false)).Methods(http.MethodPost)
+	publicApis.HandleFunc("/guest-chunk/{guestLinkID}", s.guestEntryPost(true)).Methods(http.MethodPost)
 
 	static := s.router.PathPrefix("/").Subrouter()
 	static.PathPrefix("/css/").HandlerFunc(serveStaticResource()).Methods(http.MethodGet)

@@ -38,7 +38,7 @@ func (dbe dbError) Unwrap() error {
 	return dbe.Err
 }
 
-func (s Server) entryPost() http.HandlerFunc {
+func (s Server) entryPost(chunkedUpload bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		expiration, err := s.parseExpirationFromRequest(r)
 		if err != nil {
@@ -50,7 +50,7 @@ func (s Server) entryPost() http.HandlerFunc {
 		// We're intentionally not limiting the size of the request because we
 		// assume that the uploading user is trusted, so they can upload files of
 		// any size they want.
-		id, err := s.insertFileFromRequest(r, expiration, picoshare.GuestLinkID(""))
+		id, err := s.insertFileFromRequest(r, expiration, picoshare.GuestLinkID(""), chunkedUpload)
 		if err != nil {
 			var de *dbError
 			if errors.As(err, &de) {
@@ -101,7 +101,7 @@ func (s Server) entryPut() http.HandlerFunc {
 	}
 }
 
-func (s Server) guestEntryPost() http.HandlerFunc {
+func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		guestLinkID, err := parseGuestLinkID(mux.Vars(r)["guestLinkID"])
 		if err != nil {
@@ -138,7 +138,7 @@ func (s Server) guestEntryPost() http.HandlerFunc {
 			return
 		}
 
-		id, err := s.insertFileFromRequest(r, expiration, guestLinkID)
+		id, err := s.insertFileFromRequest(r, expiration, guestLinkID, chunkedUpload)
 		if err != nil {
 			var de *dbError
 			if errors.As(err, &de) {
@@ -225,7 +225,7 @@ func parseEntryID(s string) (picoshare.EntryID, error) {
 	return picoshare.EntryID(s), nil
 }
 
-func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.ExpirationTime, guestLinkID picoshare.GuestLinkID) (picoshare.EntryID, error) {
+func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.ExpirationTime, guestLinkID picoshare.GuestLinkID, chunkedUpload bool) (picoshare.EntryID, error) {
 	// ParseMultipartForm can go above the limit we set, so set a conservative RAM
 	// limit to avoid exhausting RAM on servers with limited resources.
 	multipartMaxMemory := mibToBytes(1)
@@ -248,12 +248,22 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 		return picoshare.EntryID(""), err
 	}
 
-	filename, err := parse.Filename(r.FormValue("filename"))
+	var incomingFilename string
+	var incomingContentType string
+	if chunkedUpload {
+		incomingFilename = r.FormValue("filename")
+		incomingContentType = r.FormValue("contentType")
+	} else {
+		incomingFilename = metadata.Filename
+		incomingContentType = metadata.Header.Get("Content-Type")
+	}
+
+	filename, err := parse.Filename(incomingFilename)
 	if err != nil {
 		return picoshare.EntryID(""), err
 	}
 
-	contentType, err := parseContentType(r.FormValue("contentType"))
+	contentType, err := parseContentType(incomingContentType)
 	if err != nil {
 		return picoshare.EntryID(""), err
 	}
@@ -267,34 +277,47 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 		return picoshare.EntryID(""), errors.New("guest uploads cannot have file notes")
 	}
 
-	id := picoshare.EntryID(r.FormValue("id"))
-	if id.String() == "" {
+	var id picoshare.EntryID
+	if chunkedUpload {
+		id = picoshare.EntryID(r.FormValue("id"))
+		if id.String() == "" {
+			id = generateEntryID()
+		}
+
+		err = s.getDB(r).UploadChunk(reader, id)
+		if err != nil {
+			log.Printf("failed to save chunk: %v", err)
+			return picoshare.EntryID(""), dbError{err}
+		}
+
+		if r.FormValue("last") == "0" {
+			return id, nil
+		}
+	} else {
 		id = generateEntryID()
 	}
 
-	err = s.getDB(r).UploadChunk(reader, id)
-	if err != nil {
-		log.Printf("failed to save chunk: %v", err)
-		return picoshare.EntryID(""), dbError{err}
+	entryMetadata := picoshare.UploadMetadata{
+		ID:          id,
+		Filename:    filename,
+		ContentType: contentType,
+		Note:        note,
+		GuestLink: picoshare.GuestLink{
+			ID: guestLinkID,
+		},
+		Uploaded: s.clock.Now(),
+		Expires:  expiration,
+		Size:     fileSize,
 	}
 
-	if r.FormValue("last") == "0" {
-		return id, nil
+	if chunkedUpload {
+		err = s.getDB(r).InsertChunkedEntry(reader,
+			entryMetadata)
+	} else {
+		err = s.getDB(r).InsertEntry(reader,
+			entryMetadata)
 	}
 
-	err = s.getDB(r).InsertChunkedEntry(reader,
-		picoshare.UploadMetadata{
-			ID:          id,
-			Filename:    filename,
-			ContentType: contentType,
-			Note:        note,
-			GuestLink: picoshare.GuestLink{
-				ID: guestLinkID,
-			},
-			Uploaded: s.clock.Now(),
-			Expires:  expiration,
-			Size:     fileSize,
-		})
 	if err != nil {
 		log.Printf("failed to save entry: %v", err)
 		return picoshare.EntryID(""), dbError{err}
