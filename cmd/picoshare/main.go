@@ -9,16 +9,17 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	gorilla "github.com/mtlynch/gorilla-handlers"
 
-	"github.com/mtlynch/picoshare/v2/garbagecollect"
-	"github.com/mtlynch/picoshare/v2/handlers"
-	"github.com/mtlynch/picoshare/v2/handlers/auth/shared_secret"
-	"github.com/mtlynch/picoshare/v2/space"
-	"github.com/mtlynch/picoshare/v2/store/sqlite"
+	"github.com/mtlynch/picoshare/garbagecollect"
+	"github.com/mtlynch/picoshare/handlers"
+	"github.com/mtlynch/picoshare/handlers/auth/shared_secret"
+	"github.com/mtlynch/picoshare/space"
+	"github.com/mtlynch/picoshare/store/sqlite"
 )
 
 func main() {
@@ -28,7 +29,11 @@ func main() {
 	dbPath := flag.String("db", "data/store.db", "path to database")
 	flag.Parse()
 
-	authenticator, err := shared_secret.New(requireEnv("PS_SHARED_SECRET"))
+	secret, err := sharedSecretFromEnv()
+	if err != nil {
+		log.Fatalf("failed to read shared secret: %v", err)
+	}
+	authenticator, err := shared_secret.New(secret)
 	if err != nil {
 		log.Fatalf("invalid shared secret: %v", err)
 	}
@@ -67,16 +72,26 @@ func main() {
 	}()
 	<-stop
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	log.Fatal(httpSrv.Shutdown(ctx))
+	err = httpSrv.Shutdown(ctx)
+	cancel()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func requireEnv(key string) string {
-	val := os.Getenv(key)
-	if val == "" {
-		panic(fmt.Sprintf("missing required environment variable: %s", key))
+func sharedSecretFromEnv() (string, error) {
+	if path := os.Getenv("PS_SHARED_SECRET_FILE"); path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("reading PS_SHARED_SECRET_FILE: %w", err)
+		}
+		return strings.TrimRight(string(data), "\r\n"), nil
 	}
-	return val
+	secret := os.Getenv("PS_SHARED_SECRET")
+	if secret == "" {
+		return "", fmt.Errorf("PS_SHARED_SECRET or PS_SHARED_SECRET_FILE must be set")
+	}
+	return secret, nil
 }
 
 func ensureDirExists(dir string) {

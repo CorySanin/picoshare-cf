@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mtlynch/picoshare/v2/handlers"
-	"github.com/mtlynch/picoshare/v2/picoshare"
-	"github.com/mtlynch/picoshare/v2/store/test_sqlite"
+	"github.com/mtlynch/picoshare/handlers"
+	"github.com/mtlynch/picoshare/picoshare"
+	"github.com/mtlynch/picoshare/store/test_sqlite"
 )
 
 func TestSettingsPut(t *testing.T) {
@@ -68,10 +68,11 @@ func TestSettingsPut(t *testing.T) {
 			dataStore := test_sqlite.New()
 			s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
 
-			req, err := http.NewRequest("PUT", "/api/settings", strings.NewReader(tt.payload))
-			if err != nil {
-				t.Fatal(err)
-			}
+			req := httptest.NewRequest(
+				http.MethodPut,
+				"/api/settings",
+				strings.NewReader(tt.payload),
+			)
 			req.Header.Add("Content-Type", "text/json")
 
 			rec := httptest.NewRecorder()

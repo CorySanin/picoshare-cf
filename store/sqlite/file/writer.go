@@ -3,8 +3,8 @@ package file
 import (
 	"io"
 
-	"github.com/mtlynch/picoshare/v2/picoshare"
-	"github.com/mtlynch/picoshare/v2/store/sqlite/wrapped"
+	"github.com/mtlynch/picoshare/picoshare"
+	"github.com/mtlynch/picoshare/store/sqlite/wrapped"
 )
 
 type writer struct {
@@ -18,12 +18,12 @@ type writer struct {
 // Create a new writer for the entry ID using the given SqlTx and splitting the
 // file into separate rows in the DB of at most chunkSize bytes.
 func NewWriter(ctx wrapped.SqlDB, id picoshare.EntryID, chunkSize uint64, offset int) io.WriteCloser {
-	return &writer{
+	return new(writer{
 		ctx:     ctx,
 		entryID: id,
 		buf:     make([]byte, chunkSize),
 		offset:  offset,
-	}
+	})
 }
 
 // Write writes a buffer to the SQLite database.

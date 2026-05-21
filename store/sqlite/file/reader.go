@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 
-	"github.com/mtlynch/picoshare/v2/picoshare"
+	"github.com/mtlynch/picoshare/picoshare"
 )
 
 type (
@@ -31,14 +31,14 @@ func NewReader(db *sql.DB, id picoshare.EntryID) (io.ReadSeeker, error) {
 		return nil, err
 	}
 
-	return &fileReader{
+	return new(fileReader{
 		db:         db,
 		entryID:    id,
 		fileLength: length,
 		offset:     0,
 		chunkSize:  chunkSize,
 		buf:        bytes.NewBuffer([]byte{}),
-	}, nil
+	}), nil
 }
 
 func (fr *fileReader) Read(p []byte) (int, error) {

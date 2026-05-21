@@ -10,9 +10,7 @@
 
 ## Overview
 
-PicoShare is a minimalist service that allows you to share files easily.
-
-- [Live demo](https://demo.pico.rocks)
+PicoShare is a minimalist, self-hosted web app that makes it easy to share files on the web without restrictions on size, file type, or media format.
 
 [![PicoShare demo](https://raw.githubusercontent.com/mtlynch/picoshare/master/docs/readme-assets/demo.gif)](https://raw.githubusercontent.com/mtlynch/picoshare/master/docs/readme-assets/demo-full.gif)
 
@@ -107,11 +105,12 @@ services:
 
 ### Environment variables
 
-| Environment Variable | Meaning                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| `PORT`               | TCP port on which to listen for HTTP connections (defaults to 4001).                 |
-| `PS_BEHIND_PROXY`    | Set to `"true"` for better logging when PicoShare is running behind a reverse proxy. |
-| `PS_SHARED_SECRET`   | (required) Specifies a passphrase for the admin user to log in to PicoShare.         |
+| Environment Variable    | Meaning                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `PORT`                  | TCP port on which to listen for HTTP connections (defaults to 4001).                                              |
+| `PS_BEHIND_PROXY`       | Set to `"true"` for better logging when PicoShare is running behind a reverse proxy.                              |
+| `PS_SHARED_SECRET`      | Specifies a passphrase for the admin user to log in to PicoShare. Required if `PS_SHARED_SECRET_FILE` is not set. |
+| `PS_SHARED_SECRET_FILE` | Path to a file containing the passphrase for the admin user. Required if `PS_SHARED_SECRET` is not set.           |
 
 ### Docker environment variables
 

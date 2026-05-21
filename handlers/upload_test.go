@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/v2/handlers"
-	"github.com/mtlynch/picoshare/v2/handlers/auth/shared_secret"
-	"github.com/mtlynch/picoshare/v2/handlers/parse"
-	"github.com/mtlynch/picoshare/v2/picoshare"
-	"github.com/mtlynch/picoshare/v2/store/test_sqlite"
+	"github.com/mtlynch/picoshare/handlers"
+	"github.com/mtlynch/picoshare/handlers/auth/shared_secret"
+	"github.com/mtlynch/picoshare/handlers/parse"
+	"github.com/mtlynch/picoshare/picoshare"
+	"github.com/mtlynch/picoshare/store/test_sqlite"
 )
 
 type mockAuthenticator struct{}
@@ -106,10 +106,11 @@ func TestEntryPost(t *testing.T) {
 
 			formData, contentType := createMultipartFormBody(tt.filename, tt.note, bytes.NewBuffer([]byte(tt.contents)))
 
-			req, err := http.NewRequest("POST", "/api/entry?expiration="+tt.expiration, formData)
-			if err != nil {
-				t.Fatal(err)
-			}
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/api/entry?expiration="+tt.expiration,
+				formData,
+			)
 			req.Header.Add("Content-Type", contentType)
 
 			rec := httptest.NewRecorder()
@@ -252,10 +253,11 @@ func TestEntryPut(t *testing.T) {
 			dataStore.InsertEntry(strings.NewReader((originalData)), metadata)
 			s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
 
-			req, err := http.NewRequest("PUT", "/api/entry/"+tt.targetID, strings.NewReader(tt.payload))
-			if err != nil {
-				t.Fatal(err)
-			}
+			req := httptest.NewRequest(
+				http.MethodPut,
+				"/api/entry/"+tt.targetID,
+				strings.NewReader(tt.payload),
+			)
 			req.Header.Add("Content-Type", "text/json")
 
 			rec := httptest.NewRecorder()
@@ -318,6 +320,20 @@ func TestGuestUpload(t *testing.T) {
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
 				UrlExpires:      mustParseExpirationTime("2024-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
+			},
+			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
+			url:                        "/api/guest/abcdefgh23456789?expiration=2030-01-01T00:00:00Z",
+			status:                     http.StatusUnauthorized,
+			fileExpirationTimeExpected: picoshare.NeverExpire,
+		},
+		{
+			description: "disabled guest link",
+			guestLinkInStore: picoshare.GuestLink{
+				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
+				Created:         mustParseTime("2024-01-01T00:00:00Z"),
+				UrlExpires:      picoshare.NeverExpire,
+				MaxFileLifetime: picoshare.FileLifetimeInfinite,
+				IsDisabled:      true,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2030-01-01T00:00:00Z",
@@ -565,10 +581,7 @@ func TestGuestUpload(t *testing.T) {
 			contents := "dummy bytes"
 			formData, contentType := createMultipartFormBody(filename, tt.note, strings.NewReader(contents))
 
-			req, err := http.NewRequest("POST", tt.url, formData)
-			if err != nil {
-				t.Fatal(err)
-			}
+			req := httptest.NewRequest(http.MethodPost, tt.url, formData)
 			req.Header.Add("Content-Type", contentType)
 			req.Header.Add("Accept", "application/json")
 
@@ -578,6 +591,23 @@ func TestGuestUpload(t *testing.T) {
 
 			if got, want := res.StatusCode, tt.status; got != want {
 				t.Fatalf("status=%d, want=%d", got, want)
+			}
+
+			entries, err := dataStore.GetEntriesMetadata()
+			if err != nil {
+				t.Fatalf("failed to list entries metadata: %v", err)
+			}
+
+			// On success, we expect the request to add a single entry to the store.
+			// On failure, we expect no new entries in the store.
+			expectedEntryCount := func() int {
+				if tt.status == http.StatusOK {
+					return len(tt.entriesInStore) + 1
+				}
+				return len(tt.entriesInStore)
+			}()
+			if got, want := len(entries), expectedEntryCount; got != want {
+				t.Fatalf("entry count=%d, want=%d", got, want)
 			}
 
 			// Only check the response if the request succeeded.
@@ -676,10 +706,11 @@ func TestGuestUploadAcceptHeader(t *testing.T) {
 			contents := "dummy bytes"
 			formData, contentType := createMultipartFormBody(filename, "", strings.NewReader(contents))
 
-			req, err := http.NewRequest("POST", "/api/guest/abcdefgh23456789", formData)
-			if err != nil {
-				t.Fatal(err)
-			}
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/api/guest/abcdefgh23456789",
+				formData,
+			)
 			req.Header.Add("Content-Type", contentType)
 			if tt.acceptHeader != "" {
 				req.Header.Add("Accept", tt.acceptHeader)

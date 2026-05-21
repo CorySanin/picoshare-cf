@@ -9,10 +9,10 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
-	"github.com/mtlynch/picoshare/v2/handlers/parse"
-	"github.com/mtlynch/picoshare/v2/picoshare"
-	"github.com/mtlynch/picoshare/v2/random"
-	"github.com/mtlynch/picoshare/v2/store"
+	"github.com/mtlynch/picoshare/handlers/parse"
+	"github.com/mtlynch/picoshare/picoshare"
+	"github.com/mtlynch/picoshare/random"
+	"github.com/mtlynch/picoshare/store"
 )
 
 const EntryIDLength = 10
@@ -52,8 +52,7 @@ func (s Server) entryPost(chunkedUpload bool) http.HandlerFunc {
 		// any size they want.
 		id, err := s.insertFileFromRequest(r, expiration, picoshare.GuestLinkID(""), chunkedUpload)
 		if err != nil {
-			var de *dbError
-			if errors.As(err, &de) {
+			if _, ok := errors.AsType[*dbError](err); ok {
 				log.Printf("failed to insert uploaded file into data store: %v", err)
 				http.Error(w, "failed to insert file into database", http.StatusInternalServerError)
 			} else {
@@ -84,13 +83,8 @@ func (s Server) entryPut() http.HandlerFunc {
 			return
 		}
 
-		if _, ok := err.(store.GuestLinkNotFoundError); ok {
-			http.Error(w, "Invalid guest link ID", http.StatusNotFound)
-			return
-		}
-
 		if err := s.getDB(r).UpdateEntryMetadata(id, metadata); err != nil {
-			if _, ok := err.(store.EntryNotFoundError); ok {
+			if _, ok := errors.AsType[store.EntryNotFoundError](err); ok {
 				http.Error(w, "Invalid entry ID", http.StatusNotFound)
 				return
 			}
@@ -111,7 +105,7 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 		}
 
 		gl, err := s.getDB(r).GetGuestLink(guestLinkID)
-		if _, ok := err.(store.GuestLinkNotFoundError); ok {
+		if _, ok := errors.AsType[store.GuestLinkNotFoundError](err); ok {
 			http.Error(w, "Invalid guest link ID", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -122,6 +116,7 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 
 		if !gl.IsActive() {
 			http.Error(w, "Guest link is no longer active", http.StatusUnauthorized)
+			return
 		}
 
 		if gl.MaxFileBytes != picoshare.GuestUploadUnlimitedFileSize {
@@ -140,8 +135,7 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 
 		id, err := s.insertFileFromRequest(r, expiration, guestLinkID, chunkedUpload)
 		if err != nil {
-			var de *dbError
-			if errors.As(err, &de) {
+			if _, ok := errors.AsType[*dbError](err); ok {
 				log.Printf("failed to insert uploaded file into data store: %v", err)
 				http.Error(w, "failed to insert file into database", http.StatusInternalServerError)
 			} else {
@@ -151,11 +145,11 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 			return
 		}
 
-		if clientRequiresJson(r) {
+		if clientAcceptsJson(r) {
 			respondJSON(w, EntryPostResponse{ID: id.String()})
 		} else {
-			// If client did not explicitly request JSON, assume this is a
-			// command-line client and return plaintext.
+			// If client does not accept JSON, assume this is a command-line client
+			// and return plaintext.
 			w.Header().Set("Content-Type", "text/plain")
 			if _, err := fmt.Fprintf(w, "%s/-%s\r\n", baseURLFromRequest(r), id.String()); err != nil {
 				log.Fatalf("failed to write HTTP response: %v", err)
@@ -370,7 +364,7 @@ func mibToBytes(i int64) int64 {
 	return i << 20
 }
 
-func clientRequiresJson(r *http.Request) bool {
+func clientAcceptsJson(r *http.Request) bool {
 	accepts := r.Header.Get("Accept")
 	return accepts == "application/json"
 }

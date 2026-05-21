@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/mtlynch/picoshare/v2/picoshare"
+	"github.com/mtlynch/picoshare/picoshare"
 )
 
 const (
@@ -23,7 +23,7 @@ type (
 	}
 
 	rowScanner interface {
-		Scan(...interface{}) error
+		Scan(...any) error
 	}
 )
 

@@ -21,6 +21,16 @@ node_modules/
 .DS_Store
 
 # Playwright output
-/e2e/playwright-report/
+/playwright-report/
 /playwright/.cache/
-e2e/results/
+/e2e-results/
+
+/.direnv
+result*
+
+# Scratch directories for sharing data with AI agents.
+/reference
+/tmp
+
+# Temporary screenshots pasted into the root for AI agents.
+/image*.png

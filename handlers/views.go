@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -13,10 +14,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/mileusna/useragent"
-	"github.com/mtlynch/picoshare/v2/build"
-	"github.com/mtlynch/picoshare/v2/handlers/parse"
-	"github.com/mtlynch/picoshare/v2/picoshare"
-	"github.com/mtlynch/picoshare/v2/store"
+	"github.com/mtlynch/picoshare/build"
+	"github.com/mtlynch/picoshare/handlers/parse"
+	"github.com/mtlynch/picoshare/picoshare"
+	"github.com/mtlynch/picoshare/store"
 )
 
 //go:embed templates
@@ -232,7 +233,7 @@ func (s Server) fileEditGet() http.HandlerFunc {
 		}
 
 		metadata, err := s.getDB(r).GetEntryMetadata(id)
-		if _, ok := err.(store.EntryNotFoundError); ok {
+		if _, ok := errors.AsType[store.EntryNotFoundError](err); ok {
 			http.Error(w, "entry not found", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -286,7 +287,7 @@ func (s Server) fileInfoGet() http.HandlerFunc {
 		}
 
 		metadata, err := s.getDB(r).GetEntryMetadata(id)
-		if _, ok := err.(store.EntryNotFoundError); ok {
+		if _, ok := errors.AsType[store.EntryNotFoundError](err); ok {
 			http.Error(w, "entry not found", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -339,7 +340,7 @@ func (s Server) fileDownloadsGet() http.HandlerFunc {
 		db := s.getDB(r)
 
 		metadata, err := db.GetEntryMetadata(id)
-		if _, ok := err.(store.EntryNotFoundError); ok {
+		if _, ok := errors.AsType[store.EntryNotFoundError](err); ok {
 			http.Error(w, "entry not found", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -418,7 +419,7 @@ func (s Server) fileConfirmDeleteGet() http.HandlerFunc {
 		}
 
 		metadata, err := s.getDB(r).GetEntryMetadata(id)
-		if _, ok := err.(store.EntryNotFoundError); ok {
+		if _, ok := errors.AsType[store.EntryNotFoundError](err); ok {
 			http.Error(w, "entry not found", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -566,7 +567,7 @@ func (s Server) guestUploadGet() http.HandlerFunc {
 		}
 
 		gl, err := s.getDB(r).GetGuestLink(guestLinkID)
-		if _, ok := err.(store.GuestLinkNotFoundError); ok {
+		if _, ok := errors.AsType[store.GuestLinkNotFoundError](err); ok {
 			http.Error(w, "Invalid guest link ID", http.StatusNotFound)
 			return
 		} else if err != nil {
@@ -718,6 +719,7 @@ func (s Server) systemInformationGet() http.HandlerFunc {
 			TotalBytes        uint64
 			BuildTime         time.Time
 			Version           string
+			Revision          string
 		}{
 			commonProps:       makeCommonProps("PicoShare-CF | System Information", r.Context()),
 			TotalServingBytes: spaceUsage.TotalServingBytes,
@@ -726,6 +728,7 @@ func (s Server) systemInformationGet() http.HandlerFunc {
 			TotalBytes:        spaceUsage.FileSystemTotalBytes,
 			BuildTime:         build.Time(),
 			Version:           build.Version,
+			Revision:          build.Revision(),
 		}); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

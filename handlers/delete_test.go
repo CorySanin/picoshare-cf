@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mtlynch/picoshare/v2/garbagecollect"
-	"github.com/mtlynch/picoshare/v2/handlers"
-	"github.com/mtlynch/picoshare/v2/picoshare"
-	"github.com/mtlynch/picoshare/v2/store"
-	"github.com/mtlynch/picoshare/v2/store/test_sqlite"
+	"github.com/mtlynch/picoshare/garbagecollect"
+	"github.com/mtlynch/picoshare/handlers"
+	"github.com/mtlynch/picoshare/picoshare"
+	"github.com/mtlynch/picoshare/store"
+	"github.com/mtlynch/picoshare/store/test_sqlite"
 )
 
 var nilSpaceChecker handlers.SpaceChecker
@@ -28,10 +28,7 @@ func TestDeleteExistingFile(t *testing.T) {
 		})
 	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
 
-	req, err := http.NewRequest("DELETE", "/api/entry/hR87apiUCj", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := httptest.NewRequest(http.MethodDelete, "/api/entry/hR87apiUCj", nil)
 
 	rec := httptest.NewRecorder()
 	s.Router().ServeHTTP(rec, req)
@@ -42,7 +39,7 @@ func TestDeleteExistingFile(t *testing.T) {
 			status, http.StatusOK)
 	}
 
-	_, err = dataStore.GetEntryMetadata(picoshare.EntryID("hR87apiUCj"))
+	_, err := dataStore.GetEntryMetadata(picoshare.EntryID("hR87apiUCj"))
 	if _, ok := err.(store.EntryNotFoundError); !ok {
 		t.Fatalf("expected entry %v to be deleted", picoshare.EntryID("hR87apiUCj"))
 	}
@@ -52,10 +49,7 @@ func TestDeleteNonExistentFile(t *testing.T) {
 	dataStore := test_sqlite.New()
 	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
 
-	req, err := http.NewRequest("DELETE", "/api/entry/hR87apiUCj", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := httptest.NewRequest(http.MethodDelete, "/api/entry/hR87apiUCj", nil)
 
 	rec := httptest.NewRecorder()
 	s.Router().ServeHTTP(rec, req)
@@ -72,10 +66,7 @@ func TestDeleteInvalidEntryID(t *testing.T) {
 	dataStore := test_sqlite.New()
 	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
 
-	req, err := http.NewRequest("DELETE", "/api/entry/invalid-entry-id", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	req := httptest.NewRequest(http.MethodDelete, "/api/entry/invalid-entry-id", nil)
 
 	rec := httptest.NewRecorder()
 	s.Router().ServeHTTP(rec, req)
