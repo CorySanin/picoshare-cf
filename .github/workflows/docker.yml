@@ -56,6 +56,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v4
@@ -66,12 +67,19 @@ jobs:
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+      
+      - name: Debug Context
+        run: |
+          ls -al
+          du -sh .git || echo ".git not found or unreadable"
 
       - name: Build and push release Docker image
         uses: docker/build-push-action@v7
         env:
           BUILDX_NO_DEFAULT_ATTESTATIONS: 1
         with:
+          context: .
+          file: ./Dockerfile
           push: true
           tags: ${{ env.GH_REGISTRY }}/${{ env.IMAGE_NAME }}${{ env.ARTIFACT_SUFFIX }}:${{ env.TAG }}-${{ matrix.arch }}
           # cache-from: type=gha,scope=${{ github.workflow }}
