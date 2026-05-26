@@ -2,11 +2,17 @@ package build
 
 import (
 	"runtime/debug"
+	"strings"
 	"time"
 )
 
-// Version is set by ldflags at build time via -X 'github.com/mtlynch/picoshare/build.Version=...'
-var Version string
+func Version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	return strings.TrimPrefix(info.Main.Version, "v")
+}
 
 func Time() time.Time {
 	v := buildSetting("vcs.time")
