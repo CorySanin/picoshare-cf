@@ -1,7 +1,6 @@
 FROM golang:1.26.0 AS builder
 
 ARG TARGETPLATFORM
-ARG PS_VERSION
 
 COPY ./.git /app/.git
 COPY ./build /app/build
