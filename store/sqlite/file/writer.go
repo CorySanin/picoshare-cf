@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"io"
 
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store/sqlite/wrapped"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store/sqlite/wrapped"
 )
 
 type writer struct {

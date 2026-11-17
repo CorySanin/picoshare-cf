@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 func (s Store) InsertEntryDownload(id picoshare.EntryID, r picoshare.DownloadRecord) error {

@@ -4,6 +4,28 @@ Thanks for being interested in PicoShare!
 
 This document is meant to help developers get up to speed on PicoShare so that they can start development with as little frustration as possible.
 
+## Licensing
+
+- Contributed content is licensed under the terms of the [Zero-Clause BSD license (0BSD)](https://opensource.org/license/0bsd).
+- Contributors accept the terms of the [project license](LICENSE) at the time of contribution.
+
+By making a contribution, you accept both the [current project license](LICENSE) terms, and that all contributions that you have made are provided under the terms of the 0BSD license.
+
+### Zero-Clause BSD
+
+```text
+Permission to use, copy, modify, and/or distribute this software for
+any purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL
+WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE
+FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
+DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
+
 ## Setting up a development environment
 
 The steps below show you how to quickly set up a development environment for PicoShare.
@@ -88,7 +110,7 @@ go fmt ./...
 ## Proposing changes
 
 - If you're making a small change, submit a PR to show your proposal.
-- If you're making a large change (over 100 LOC or three hours of dev time), [file an issue](https://github.com/mtlynch/picoshare/issues/new/choose) first to talk through the proposed change. This prevents you from wasting time on a change that has a low chance of being accepted.
+- If you're making a large change (over 100 LOC or three hours of dev time), [file an issue](https://codefloe.com/mtlynch/picoshare/issues/new) first to talk through the proposed change. This prevents you from wasting time on a change that has a low chance of being accepted.
 
 ## How to get your PR merged quickly
 

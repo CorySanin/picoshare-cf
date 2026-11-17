@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/handlers"
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store"
-	"github.com/mtlynch/picoshare/store/test_sqlite"
-	"github.com/mtlynch/picoshare/testutil"
+	"codefloe.com/mtlynch/picoshare/handlers"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store"
+	"codefloe.com/mtlynch/picoshare/store/test_sqlite"
+	"codefloe.com/mtlynch/picoshare/testutil"
 )
 
 func TestGuestLinksPost(t *testing.T) {

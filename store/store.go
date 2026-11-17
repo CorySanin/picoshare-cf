@@ -3,7 +3,7 @@ package store
 import (
 	"fmt"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 // EntryNotFoundError occurs when no entry exists with the given ID.

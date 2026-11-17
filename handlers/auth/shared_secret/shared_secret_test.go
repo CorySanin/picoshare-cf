@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mtlynch/picoshare/handlers/auth/shared_secret"
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/handlers/auth/shared_secret"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 func TestStartSession(t *testing.T) {

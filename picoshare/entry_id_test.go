@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 func TestEntryIDFromString(t *testing.T) {

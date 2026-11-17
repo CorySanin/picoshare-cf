@@ -5,14 +5,14 @@
   "description": "PicoShare dev scripts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mtlynch/picoshare.git"
+    "url": "ssh://git@codefloe.com/mtlynch/picoshare.git"
   },
   "author": "Michael Lynch",
   "license": "AGPL-3.0",
   "bugs": {
-    "url": "https://github.com/mtlynch/picoshare/issues"
+    "url": "https://codefloe.com/mtlynch/picoshare/issues"
   },
-  "homepage": "https://github.com/mtlynch/picoshare",
+  "homepage": "https://codefloe.com/mtlynch/picoshare",
   "devDependencies": {
     "@eslint/js": "9.39.2",
     "@playwright/test": "1.59.1",

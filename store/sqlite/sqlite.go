@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 const (

@@ -15,12 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/handlers"
-	"github.com/mtlynch/picoshare/handlers/auth/shared_secret"
-	"github.com/mtlynch/picoshare/handlers/parse"
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store/test_sqlite"
-	"github.com/mtlynch/picoshare/testutil"
+	"codefloe.com/mtlynch/picoshare/handlers"
+	"codefloe.com/mtlynch/picoshare/handlers/auth/shared_secret"
+	"codefloe.com/mtlynch/picoshare/handlers/parse"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store/test_sqlite"
+	"codefloe.com/mtlynch/picoshare/testutil"
 )
 
 type mockAuthenticator struct{}

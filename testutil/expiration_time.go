@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 // MustCreateExpirationTime constructs an expiration or fails the test.

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store"
 )
 
 func (s Store) GetGuestLink(id picoshare.GuestLinkID) (picoshare.GuestLink, error) {

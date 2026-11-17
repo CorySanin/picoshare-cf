@@ -1,4 +1,4 @@
-module github.com/mtlynch/picoshare
+module codefloe.com/mtlynch/picoshare
 
 go 1.26.0
 

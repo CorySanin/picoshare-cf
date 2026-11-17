@@ -5,7 +5,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 type (

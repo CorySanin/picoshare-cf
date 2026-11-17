@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/mtlynch/picoshare/handlers/auth/shared_secret/kdf"
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/handlers/auth/shared_secret/kdf"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 const (

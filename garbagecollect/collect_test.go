@@ -9,10 +9,10 @@ import (
 
 	"github.com/go-test/deep"
 
-	"github.com/mtlynch/picoshare/garbagecollect"
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store/test_sqlite"
-	"github.com/mtlynch/picoshare/testutil"
+	"codefloe.com/mtlynch/picoshare/garbagecollect"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store/test_sqlite"
+	"codefloe.com/mtlynch/picoshare/testutil"
 )
 
 func TestCollectDoesNothingWhenStoreIsEmpty(t *testing.T) {

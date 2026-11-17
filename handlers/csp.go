@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/mtlynch/picoshare/random"
+	"codefloe.com/mtlynch/picoshare/random"
 )
 
 type contextKey struct {
@@ -44,7 +44,7 @@ func enforceContentSecurityPolicy(next http.Handler) http.Handler {
 					"'self'",
 					// Firefox refuses to load an inline <style> tag in an HTML custom
 					// element, even if we specify a nonce:
-					// https://github.com/mtlynch/picoshare/issues/249
+					// https://codefloe.com/mtlynch/picoshare/issues/249
 					"'unsafe-inline'",
 				},
 			},

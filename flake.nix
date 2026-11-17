@@ -523,7 +523,7 @@
 
           publish-release = gopkg.writeShellApplication {
             name = "publish-release";
-            runtimeInputs = with gopkg; [bash coreutils gzip gnutar git gh crane jq];
+            runtimeInputs = with gopkg; [bash coreutils gzip gnutar git curl crane jq];
             text = ''
               exec bash ${./dev-scripts/publish-release} \
                 ${release.release-binaries} ${release.release-images} ${./dev-scripts/package-binaries}

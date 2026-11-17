@@ -5,7 +5,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/mtlynch/picoshare/garbagecollect"
+	"codefloe.com/mtlynch/picoshare/garbagecollect"
 )
 
 type (

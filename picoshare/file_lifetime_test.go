@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/testutil"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/testutil"
 )
 
 func TestFileLifetime(t *testing.T) {

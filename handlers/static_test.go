@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/handlers"
+	"codefloe.com/mtlynch/picoshare/handlers"
 )
 
 func TestStaticResourceCaching(t *testing.T) {

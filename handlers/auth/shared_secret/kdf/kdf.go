@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/crypto/pbkdf2"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 var (

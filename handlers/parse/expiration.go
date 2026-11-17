@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 const expirationTimeFormat = time.RFC3339

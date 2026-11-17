@@ -15,12 +15,12 @@ import (
 
 	gorilla "github.com/mtlynch/gorilla-handlers"
 
-	"github.com/mtlynch/picoshare/garbagecollect"
-	"github.com/mtlynch/picoshare/handlers"
-	"github.com/mtlynch/picoshare/handlers/auth/shared_secret"
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/space"
-	"github.com/mtlynch/picoshare/store/sqlite"
+	"codefloe.com/mtlynch/picoshare/garbagecollect"
+	"codefloe.com/mtlynch/picoshare/handlers"
+	"codefloe.com/mtlynch/picoshare/handlers/auth/shared_secret"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/space"
+	"codefloe.com/mtlynch/picoshare/store/sqlite"
 )
 
 func main() {

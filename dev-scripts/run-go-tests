@@ -58,7 +58,7 @@ readonly go_package_dirs
 gci_sections=(
   "--section=standard"
   "--section=default"
-  "--section=prefix(github.com/mtlynch/picoshare)"
+  "--section=prefix(codefloe.com/mtlynch/picoshare)"
 )
 readonly gci_sections
 gci_output="$(gci list \

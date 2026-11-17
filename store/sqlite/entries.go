@@ -7,9 +7,9 @@ import (
 	"io"
 	"log"
 
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store"
-	"github.com/mtlynch/picoshare/store/sqlite/file"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store"
+	"codefloe.com/mtlynch/picoshare/store/sqlite/file"
 )
 
 func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
@@ -186,7 +186,7 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 	// Note: We deliberately don't use a transaction here, as it bloats memory, so
 	// we can end up in a state with orphaned entries data. We clean it up in
 	// Purge().
-	// See: https://github.com/mtlynch/picoshare/issues/284
+	// See: https://codefloe.com/mtlynch/picoshare/issues/284
 	w := file.NewWriter(s.db, metadata.ID, s.chunkSize)
 	if _, err := io.Copy(w, reader); err != nil {
 		return err

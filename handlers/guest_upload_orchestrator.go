@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 var errParallelGuestUpload = errors.New("parallel uploads are forbidden on this guest link")

@@ -6,7 +6,7 @@ import (
 
 	"github.com/ncruces/go-sqlite3/vfs/memdb"
 
-	"github.com/mtlynch/picoshare/store/sqlite"
+	"codefloe.com/mtlynch/picoshare/store/sqlite"
 )
 
 const optimizeForLitestream = false

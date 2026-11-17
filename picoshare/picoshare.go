@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mtlynch/picoshare/random"
+	"codefloe.com/mtlynch/picoshare/random"
 )
 
 // picoshareEpoch is the first release date, matching migration 015's lower

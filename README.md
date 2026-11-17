@@ -1,18 +1,16 @@
 # PicoShare
 
-[![NixCI](https://nix-ci.com/badge/gh:mtlynch:picoshare)](https://nix-ci.com/gh:mtlynch:picoshare)
+[![NixCI](https://nix-ci.com/badge/url:ssh%5C:%2F%2Fgit@codefloe.com%2Fmtlynch%2Fpicoshare.git)](https://nix-ci.com/url:ssh%5C:%2F%2Fgit@codefloe.com%2Fmtlynch%2Fpicoshare.git)
 [![Docker Version](https://img.shields.io/docker/v/mtlynch/picoshare?sort=semver&maxAge=86400)](https://hub.docker.com/r/mtlynch/picoshare/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/mtlynch/picoshare.svg?maxAge=604800)](https://hub.docker.com/r/mtlynch/picoshare/)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/mtlynch/picoshare)](https://github.com/mtlynch/picoshare/commits/master)
-[![GitHub last commit](https://img.shields.io/github/last-commit/mtlynch/picoshare)](https://github.com/mtlynch/picoshare/commits/master)
-[![Contributors](https://img.shields.io/github/contributors/mtlynch/picoshare)](https://github.com/mtlynch/picoshare/graphs/contributors)
+[![Source code](https://img.shields.io/badge/source-Codefloe-blue)](https://codefloe.com/mtlynch/picoshare)
 [![License](http://img.shields.io/:license-agpl-blue.svg?style=flat-square)](LICENSE)
 
 ## Overview
 
 PicoShare is a minimalist, self-hosted web app that makes it easy to share files on the web without restrictions on size, file type, or media format.
 
-[![PicoShare demo](https://raw.githubusercontent.com/mtlynch/picoshare/master/docs/readme-assets/demo.gif)](https://raw.githubusercontent.com/mtlynch/picoshare/master/docs/readme-assets/demo-full.gif)
+[![PicoShare demo](https://codefloe.com/mtlynch/picoshare/raw/branch/master/docs/readme-assets/demo.gif)](https://codefloe.com/mtlynch/picoshare/raw/branch/master/docs/readme-assets/demo-full.gif)
 
 ## Why PicoShare?
 

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/handlers"
+	"codefloe.com/mtlynch/picoshare/handlers"
 )
 
 var errMultipleResponseWrites = errors.New("response body written more than once")

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mtlynch/picoshare/handlers"
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store/test_sqlite"
+	"codefloe.com/mtlynch/picoshare/handlers"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store/test_sqlite"
 )
 
 func TestSettingsPut(t *testing.T) {

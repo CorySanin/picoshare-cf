@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 const minFileLifetimeInDays = 1

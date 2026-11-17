@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 type (

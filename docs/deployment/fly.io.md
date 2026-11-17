@@ -18,7 +18,7 @@ REGION='iad'
 RANDOM_SUFFIX="$(head /dev/urandom | tr -dc 'a-z0-9' | head -c 6 ; echo '')"
 APP_NAME="picoshare-${RANDOM_SUFFIX}"
 
-curl -s -L https://raw.githubusercontent.com/mtlynch/picoshare/master/docs/deployment/fly-assets/make-fly-config | \
+curl -s -L https://codefloe.com/mtlynch/picoshare/raw/branch/master/docs/deployment/fly-assets/make-fly-config | \
   bash /dev/stdin "${APP_NAME}"
 
 fly apps create --name "${APP_NAME}"

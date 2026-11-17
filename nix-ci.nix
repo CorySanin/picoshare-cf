@@ -13,7 +13,7 @@
       system = "x86_64-linux";
       branches = "v*";
       in-repo = true;
-      secrets = ["GH_TOKEN" "DOCKERHUB_USERNAME" "DOCKERHUB_ACCESS_TOKEN"];
+      secrets = ["CODEFLOE_TOKEN" "DOCKERHUB_USERNAME" "DOCKERHUB_ACCESS_TOKEN"];
     };
   };
 }

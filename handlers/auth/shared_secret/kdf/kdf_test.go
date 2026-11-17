@@ -3,8 +3,8 @@ package kdf_test
 import (
 	"testing"
 
-	"github.com/mtlynch/picoshare/handlers/auth/shared_secret/kdf"
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/handlers/auth/shared_secret/kdf"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 func TestKeyComparison(t *testing.T) {

@@ -1,6 +1,6 @@
 package space
 
-import "github.com/mtlynch/picoshare/space/checkers"
+import "codefloe.com/mtlynch/picoshare/space/checkers"
 
 type (
 	FileSystemChecker interface {

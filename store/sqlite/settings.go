@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/picoshare"
 )
 
 // We only store one set of settings at a time, so we used a fixed row ID.

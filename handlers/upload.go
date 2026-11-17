@@ -10,9 +10,9 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/mtlynch/picoshare/handlers/parse"
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store"
+	"codefloe.com/mtlynch/picoshare/handlers/parse"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store"
 )
 
 type (

@@ -13,8 +13,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/store"
+	"codefloe.com/mtlynch/picoshare/picoshare"
+	"codefloe.com/mtlynch/picoshare/store"
 )
 
 // maxEntryUnlockRequestBytes bounds the body of a request to unlock an entry.

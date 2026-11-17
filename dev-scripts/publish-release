@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Publish a tagged release's binary archives and multi-platform container image.
+# Publish a tagged release's binary archives to Codefloe and its container image
+# to Docker Hub.
 set -euo pipefail
 umask 077
 
@@ -32,15 +33,18 @@ if [[ $head_commit != "$NIX_CI_GIT_COMMIT_SHA" || \
   exit 1
 fi
 
-for secret in GH_TOKEN DOCKERHUB_USERNAME DOCKERHUB_ACCESS_TOKEN; do
+for secret in CODEFLOE_TOKEN DOCKERHUB_USERNAME DOCKERHUB_ACCESS_TOKEN; do
   if [[ -z ${!secret:-} ]]; then
     printf '%s is required\n' "$secret" >&2
     exit 1
   fi
 done
 
-repo=mtlynch/picoshare
-gh release view "$tag" --repo "$repo" >/dev/null
+release_api='https://codefloe.com/api/v1/repos/mtlynch/picoshare/releases'
+curl_options=(--fail-with-body --silent --show-error
+  --header "Authorization: token $CODEFLOE_TOKEN")
+release=$(curl "${curl_options[@]}" "$release_api/tags/$tag")
+release_id=$(jq --exit-status '.id | numbers' <<< "$release")
 
 workdir=$(mktemp --directory)
 trap 'rm --recursive --force "$workdir"' EXIT
@@ -78,5 +82,16 @@ if [[ $platforms != "$expected" ]]; then
   exit 1
 fi
 
-gh release upload "$tag" "$dist"/*.tar.gz --repo "$repo" --clobber
+for archive in "$dist"/*.tar.gz; do
+  name=${archive##*/}
+  # Replace matching attachments so rerunning a release remains safe.
+  jq --raw-output --arg name "$name" \
+    '.assets[] | select(.name == $name) | .id' <<< "$release" |
+    while IFS= read -r asset_id; do
+      curl "${curl_options[@]}" --request DELETE \
+        "$release_api/$release_id/assets/$asset_id"
+    done
+  curl "${curl_options[@]}" --form "attachment=@$archive" \
+    "$release_api/$release_id/assets" > /dev/null
+done
 crane tag "$image_repo@$release_digest" latest

@@ -150,7 +150,7 @@ test("uploads a file and deletes it", async ({ page }) => {
 });
 
 // Prevent a regression of a bug affecting Firefox:
-// https://github.com/mtlynch/picoshare/issues/405
+// https://codefloe.com/mtlynch/picoshare/issues/405
 test("uploads a file and then uploads another", async ({ page }) => {
   await login(page);
 
