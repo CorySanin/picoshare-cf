@@ -1,0 +1,45 @@
+when:
+  - event: pull_request
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+
+steps:
+  - name: test
+    image: alpine:3.22
+    environment:
+      # Pin the official client release used by this workflow.
+      NIXCI_CLIENT_VERSION: 0.0.2
+      NIX_CI_USERNAME:
+        from_secret: nix_ci_username
+      NIX_CI_SECRET:
+        from_secret: nix_ci_secret
+    commands:
+      - |
+        # Translate the host OS to the release archive naming convention.
+        case "$(uname -s)" in
+          Linux) nixci_client_os=linux ;;
+          Darwin) nixci_client_os=macos ;;
+          *) printf 'Unsupported operating system: %s\n' "$(uname -s)" >&2; exit 1 ;;
+        esac
+        # Translate common CPU names to the release architecture names.
+        case "$(uname -m)" in
+          x86_64 | amd64) nixci_client_arch=amd64 ;;
+          aarch64 | arm64) nixci_client_arch=arm64 ;;
+          *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
+        esac
+        # Download the release archive for this host platform.
+        wget \
+          --quiet \
+          --output-document nixci-client.tar.gz \
+          "https://codefloe.com/mtlynch/nixci-client/releases/download/$${NIXCI_CLIENT_VERSION}/nixci-client-v$${NIXCI_CLIENT_VERSION}-$${nixci_client_os}-$${nixci_client_arch}.tar.gz"
+      # Extract the client executable from the release archive.
+      - tar --extract --gzip --file nixci-client.tar.gz
+      - |
+        # Start the NixCI build and wait for it to finish.
+        ./nixci-client \
+          --wait-timeout 15m \
+          --clone-url "$${CI_REPO_CLONE_URL}" \
+          --default-branch "$${CI_REPO_DEFAULT_BRANCH}" \
+          --ref "$${CI_COMMIT_REF}" \
+          --commit "$${CI_COMMIT_SHA}" \
+          --message "$${CI_COMMIT_MESSAGE}"
