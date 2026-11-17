@@ -30,11 +30,6 @@
     .notification {
       max-width: 70ch;
     }
-
-    .code {
-      font-family: "Courier New", Courier, monospace;
-      font-weight: bold;
-    }
   </style>
 {{ end }}
 
@@ -106,20 +101,4 @@
       >.
     </p>
   </div>
-
-  <h2>PicoShare Version</h2>
-  <ul>
-    <li><strong>Version</strong>: {{ .Version }}</li>
-    {{ if .Revision }}
-      <li>
-        <strong>Revision</strong>: <span class="code">{{ .Revision }}</span>
-      </li>
-    {{ end }}
-    {{ if not .BuildTime.IsZero }}
-      <li>
-        <strong>Built at</strong>:
-        {{ .BuildTime.Format "2006-01-02 15:04:05 -0700" }}
-      </li>
-    {{ end }}
-  </ul>
 {{ end }}

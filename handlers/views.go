@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mileusna/useragent"
 
-	"codefloe.com/mtlynch/picoshare/build"
 	"codefloe.com/mtlynch/picoshare/handlers/parse"
 	"codefloe.com/mtlynch/picoshare/picoshare"
 	"codefloe.com/mtlynch/picoshare/store"
@@ -702,18 +701,12 @@ func (s Server) systemInformationGet() http.HandlerFunc {
 			DatabaseFileBytes uint64
 			UsedBytes         uint64
 			TotalBytes        uint64
-			BuildTime         time.Time
-			Version           string
-			Revision          string
 		}{
 			commonProps:       makeCommonProps("PicoShare - System Information", r.Context()),
 			TotalServingBytes: spaceUsage.TotalServingBytes,
 			DatabaseFileBytes: spaceUsage.DatabaseFileSize,
 			UsedBytes:         spaceUsage.FileSystemUsedBytes,
 			TotalBytes:        spaceUsage.FileSystemTotalBytes,
-			BuildTime:         build.Time(),
-			Version:           build.Version(),
-			Revision:          build.Revision(),
 		})
 	}
 }

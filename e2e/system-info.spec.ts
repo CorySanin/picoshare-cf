@@ -7,5 +7,10 @@ test("views system info", async ({ page }) => {
   await page.getByRole("menuitem", { name: "System" }).hover();
   await page.getByRole("menuitem", { name: "Information" }).click();
   await expect(page).toHaveURL("/information");
-  await expect(page.locator(".content")).toContainText(/Version:\s+[^v\s]\S*/);
+  await expect(
+    page.getByRole("heading", { name: "System Information", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("progressbar", { name: "Disk usage" }),
+  ).toBeVisible();
 });
