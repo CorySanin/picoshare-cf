@@ -1,6 +1,6 @@
 # PicoShare
 
-[![NixCI](https://nix-ci.com/badge/url:ssh%5C:%2F%2Fgit@codefloe.com%2Fmtlynch%2Fpicoshare.git)](https://nix-ci.com/url:ssh%5C:%2F%2Fgit@codefloe.com%2Fmtlynch%2Fpicoshare.git)
+[![NixCI](https://nix-ci.com/badge/url:https%5C:%2F%2Fcodefloe.com%2Fmtlynch%2Fpicoshare.git)](https://nix-ci.com/url:https%5C:%2F%2Fcodefloe.com%2Fmtlynch%2Fpicoshare.git)
 [![Docker Version](https://img.shields.io/docker/v/mtlynch/picoshare?sort=semver&maxAge=86400)](https://hub.docker.com/r/mtlynch/picoshare/)
 [![Docker Pulls](https://img.shields.io/docker/pulls/mtlynch/picoshare.svg?maxAge=604800)](https://hub.docker.com/r/mtlynch/picoshare/)
 [![Source code](https://img.shields.io/badge/source-Codefloe-blue)](https://codefloe.com/mtlynch/picoshare)
