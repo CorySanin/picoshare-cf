@@ -42,6 +42,21 @@ test("uploads a file without specifying any parameters", async ({
   await expect(matchingRow.getByRole("cell").nth(noteColumn)).toBeEmpty();
 });
 
+test("clicking Upload in the navbar opens the file picker", async ({
+  page,
+}) => {
+  await login(page);
+  await page.waitForLoadState("networkidle");
+
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("menuitem", { name: "Upload" }).click();
+  const fileChooser = await fileChooserPromise;
+
+  expect(await fileChooser.element().getAttribute("class")).toContain(
+    "file-input",
+  );
+});
+
 test("uploads a file with a custom expiration time", async ({ page }) => {
   await login(page);
 
