@@ -82,6 +82,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Login to GitHub Container Registry
         uses: &dockerlogin docker/login-action@v4
@@ -103,8 +106,8 @@ jobs:
           push: true
           tags: ${{ env.GH_REGISTRY }}/${{ env.IMAGE_NAME }}${{ env.ARTIFACT_SUFFIX }}:${{ env.TAG }}-${{ matrix.arch }}
           labels: ${{ needs.varinit.outputs.image_labels }}
-          cache-from: type=gha,scope=${{ github.workflow }}
-          cache-to: type=gha,mode=max,scope=${{ github.workflow }}
+          # cache-from: type=gha,scope=${{ github.workflow }}
+          # cache-to: type=gha,mode=max,scope=${{ github.workflow }}
   
   combine-images:
     name: Combine Docker images
