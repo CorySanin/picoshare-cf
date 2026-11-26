@@ -6,8 +6,8 @@ set -e
 # Exit on unset variable.
 set -u
 
-PS_ARGS="$*"
-readonly PS_ARGS
+PS_PROCESS_ARGS=("$@")
+readonly -a PS_PROCESS_ARGS
 
 # Parse the -db flag to PicoShare since we need to know it before passing it
 # along.
@@ -36,18 +36,34 @@ is_litestream_enabled() {
   echo "${IS_ENABLED}"
 }
 
+quote_litestream_command() {
+  local RESULT=''
+  local ARG
+
+  # Litestream 0.3 accepts -exec as one string and parses it with shellwords.
+  # Single-quote each argument so it reconstructs the original boundaries.
+  for ARG in "$@"; do
+    ARG=${ARG//\'/\'\\\'\'}
+    RESULT+="${RESULT:+ }'${ARG}'"
+  done
+
+  printf '%s\n' "${RESULT}"
+}
+
 IS_LITESTREAM_ENABLED="$(is_litestream_enabled)"
 readonly IS_LITESTREAM_ENABLED
 
 # Echo commands to stdout.
 set -x
 
-PS_LAUNCH_CMD="/app/picoshare ${PS_ARGS}"
+PS_LAUNCH_CMD="$(quote_litestream_command /app/picoshare "${PS_PROCESS_ARGS[@]}")"
+readonly PS_LAUNCH_CMD
 
 if [[ "${IS_LITESTREAM_ENABLED}" == 'true' ]]; then
   /app/litestream version
   echo "LITESTREAM_BUCKET=${LITESTREAM_BUCKET}"
   echo "LITESTREAM_ENDPOINT=${LITESTREAM_ENDPOINT}"
+  echo "LITESTREAM_PATH=${LITESTREAM_PATH}"
   echo "LITESTREAM_RETENTION=${LITESTREAM_RETENTION}"
 
   if [[ -f "$DB_PATH" ]]; then
@@ -62,5 +78,5 @@ if [[ "${IS_LITESTREAM_ENABLED}" == 'true' ]]; then
   exec /app/litestream replicate -exec "$PS_LAUNCH_CMD"
 else
   echo "Starting without litestream"
-  eval "exec ${PS_LAUNCH_CMD}"
+  exec /app/picoshare "${PS_PROCESS_ARGS[@]}"
 fi

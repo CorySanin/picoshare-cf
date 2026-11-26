@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { login } from "./helpers/login";
 
 test("upload a file with no attributes, and verify the file info page is correct", async ({
@@ -14,7 +14,7 @@ test("upload a file with no attributes, and verify the file info page is correct
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -31,45 +31,45 @@ test("upload a file with no attributes, and verify the file info page is correct
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Filename" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("simple-upload.txt");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Size" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("24 B");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Expires" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText(/ \(30 days\)$/);
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Downloads" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("0 (History)");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Note" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("None");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Uploaded by" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("You");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Upload time" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText(
-    /^(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}), (20[0-9]{2}) at ([1-9]|1[0-2]):([0-5][0-9]) (AM|PM)/
+    /^(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}), (20[0-9]{2}) at ([1-9]|1[0-2]):([0-5][0-9]) (AM|PM)/,
   );
 });
 
@@ -91,7 +91,7 @@ test("upload a file with a note and custom expiration, and verify the file info 
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -108,38 +108,38 @@ test("upload a file with a note and custom expiration, and verify the file info 
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Filename" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("upload-with-more-metadata.txt");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Size" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("34 B");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Expires" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText(/2029-09-03 \(\d+ days\)/);
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Note" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("Please note that this upload has a note");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Uploaded by" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("You");
   await expect(
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Upload time" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText(
-    /^(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}), (20[0-9]{2}) at ([1-9]|1[0-2]):([0-5][0-9]) (AM|PM)/
+    /^(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}), (20[0-9]{2}) at ([1-9]|1[0-2]):([0-5][0-9]) (AM|PM)/,
   );
 });

@@ -5,7 +5,7 @@ dbs:
     replicas:
       - type: s3
         bucket: ${LITESTREAM_BUCKET}
-        path: db
+        path: ${LITESTREAM_PATH}
         endpoint: ${LITESTREAM_ENDPOINT}
         force-path-style: true
         retention: ${LITESTREAM_RETENTION}

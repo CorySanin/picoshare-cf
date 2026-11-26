@@ -1,4 +1,4 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect, type Page } from "./fixtures";
 import { login } from "./helpers/login";
 
 const noteColumn = 1;
@@ -27,29 +27,29 @@ test("pastes text in the upload input", async ({ page }) => {
   await clipboardPaste(page);
 
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
   await expect(page.locator("#upload-result upload-links")).toHaveAttribute(
     "filename",
-    /pasted-.*/
+    /pasted-.*/,
   );
   await expect(
-    page.locator("#upload-result upload-links #verbose-link-box #link")
+    page.locator("#upload-result upload-links #verbose-link-box #link"),
   ).toBeVisible();
   await expect(
-    page.locator("#upload-result upload-links #short-link-box #link")
+    page.locator("#upload-result upload-links #short-link-box #link"),
   ).toBeVisible();
 
   await page.getByRole("menuitem", { name: "Files" }).click();
   await expect(
-    page.getByRole("row").filter({ hasText: /pasted-.*/ })
+    page.getByRole("row").filter({ hasText: /pasted-.*/ }),
   ).toBeVisible();
   await expect(
     page
       .getByRole("row")
       .filter({ hasText: /pasted-.*/ })
       .getByRole("cell")
-      .nth(noteColumn)
+      .nth(noteColumn),
   ).toBeEmpty();
 
   await page
@@ -58,7 +58,7 @@ test("pastes text in the upload input", async ({ page }) => {
     .getByRole("link")
     .click();
 
-  await expect(await page.innerText("body")).toEqual("I'm pasting dummy text!");
+  await expect(page.locator("body")).toHaveText("I'm pasting dummy text!");
 });
 
 test("pastes text in the upload input that requires UTF-8", async ({
@@ -71,24 +71,22 @@ test("pastes text in the upload input that requires UTF-8", async ({
   await clipboardPaste(page);
 
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
   await expect(page.locator("#upload-result upload-links")).toHaveAttribute(
     "filename",
-    /pasted-.*/
+    /pasted-.*/,
   );
   await expect(
-    page.locator("#upload-result upload-links #verbose-link-box #link")
+    page.locator("#upload-result upload-links #verbose-link-box #link"),
   ).toBeVisible();
   await expect(
-    page.locator("#upload-result upload-links #short-link-box #link")
+    page.locator("#upload-result upload-links #short-link-box #link"),
   ).toBeVisible();
 
   await page
     .locator("#upload-result upload-links #verbose-link-box #link")
     .click();
 
-  await expect(await page.innerText("body")).toEqual(
-    "璇疯緭鍏ユ偍鐨勯棶棰橈細"
-  );
+  await expect(page.locator("body")).toHaveText("璇疯緭鍏ユ偍鐨勯棶棰橈細");
 });

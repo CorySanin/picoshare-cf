@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { login } from "./helpers/login";
 
 test("sandboxed HTML downloads cannot log out the current user session", async ({
@@ -24,7 +24,7 @@ test("sandboxed HTML downloads cannot log out the current user session", async (
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   const downloadURL = await page
@@ -38,13 +38,13 @@ test("sandboxed HTML downloads cannot log out the current user session", async (
   expect(response?.headers()["content-security-policy"]).toBe("sandbox");
 
   await expect(attackPage.locator("#attack-status")).toHaveText(
-    "Attack did not start."
+    "Attack did not start.",
   );
   await attackPage.waitForLoadState("networkidle");
 
   await page.getByRole("menuitem", { name: "Files" }).click();
   await expect(page).toHaveURL(/\/files$/);
   await expect(
-    page.getByRole("row").filter({ hasText: "logout-attack.html" })
+    page.getByRole("row").filter({ hasText: "logout-attack.html" }),
   ).toBeVisible();
 });

@@ -5,28 +5,30 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mtlynch/picoshare/garbagecollect"
 	"github.com/mtlynch/picoshare/handlers"
 	"github.com/mtlynch/picoshare/picoshare"
 	"github.com/mtlynch/picoshare/store"
 	"github.com/mtlynch/picoshare/store/test_sqlite"
+	"github.com/mtlynch/picoshare/testutil"
 )
 
-var nilSpaceChecker handlers.SpaceChecker
+var nilSpaceCheckFunc handlers.SpaceCheckFunc
 var nilGarbageCollector *garbagecollect.Collector
 
 func TestDeleteExistingFile(t *testing.T) {
-	dataStore := test_sqlite.New()
+	dataStore := test_sqlite.New(t)
 	fileContents := "dummy data"
 	dataStore.InsertEntry(strings.NewReader(fileContents),
 		picoshare.UploadMetadata{
-			ID:       picoshare.EntryID("hR87apiUCj"),
+			ID:       picoshare.MustCreateEntryID("hR87apiUCj"),
 			Uploaded: mustParseTime("2023-01-01T00:00:00Z"),
-			Expires:  mustParseExpirationTime("2024-01-01T00:00:00Z"),
+			Expires:  testutil.MustParseExpirationTime(t, "2024-01-01T00:00:00Z"),
 			Size:     mustParseFileSize(len(fileContents)),
 		})
-	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
+	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, time.Now)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/entry/hR87apiUCj", nil)
 
@@ -39,15 +41,15 @@ func TestDeleteExistingFile(t *testing.T) {
 			status, http.StatusOK)
 	}
 
-	_, err := dataStore.GetEntryMetadata(picoshare.EntryID("hR87apiUCj"))
+	_, err := dataStore.GetEntryMetadata(picoshare.MustCreateEntryID("hR87apiUCj"))
 	if _, ok := err.(store.EntryNotFoundError); !ok {
-		t.Fatalf("expected entry %v to be deleted", picoshare.EntryID("hR87apiUCj"))
+		t.Fatalf("expected entry %v to be deleted", picoshare.MustCreateEntryID("hR87apiUCj"))
 	}
 }
 
 func TestDeleteNonExistentFile(t *testing.T) {
-	dataStore := test_sqlite.New()
-	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
+	dataStore := test_sqlite.New(t)
+	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, time.Now)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/entry/hR87apiUCj", nil)
 
@@ -63,8 +65,8 @@ func TestDeleteNonExistentFile(t *testing.T) {
 }
 
 func TestDeleteInvalidEntryID(t *testing.T) {
-	dataStore := test_sqlite.New()
-	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
+	dataStore := test_sqlite.New(t)
+	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, time.Now)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/entry/invalid-entry-id", nil)
 

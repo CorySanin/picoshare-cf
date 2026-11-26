@@ -18,6 +18,7 @@ import (
 	"github.com/mtlynch/picoshare/garbagecollect"
 	"github.com/mtlynch/picoshare/handlers"
 	"github.com/mtlynch/picoshare/handlers/auth/shared_secret"
+	"github.com/mtlynch/picoshare/picoshare"
 	"github.com/mtlynch/picoshare/space"
 	"github.com/mtlynch/picoshare/store/sqlite"
 )
@@ -29,20 +30,20 @@ func main() {
 	dbPath := flag.String("db", "data/store.db", "path to database")
 	flag.Parse()
 
-	secret, err := sharedSecretFromEnv()
-	if err != nil {
-		log.Fatalf("failed to read shared secret: %v", err)
-	}
-	authenticator, err := shared_secret.New(secret)
-	if err != nil {
-		log.Fatalf("invalid shared secret: %v", err)
-	}
-
 	dbDir := filepath.Dir(*dbPath)
 
 	ensureDirExists(dbDir)
 
-	store := sqlite.New(*dbPath, isLitestreamEnabled())
+	authenticator, err := sharedSecretFromEnv()
+	if err != nil {
+		log.Fatalf("failed to read shared secret: %v", err)
+	}
+
+	store := sqlite.New(sqlite.Params{
+		Path:                  *dbPath,
+		OptimizeForLitestream: isLitestreamEnabled(),
+		Now:                   time.Now,
+	})
 
 	spaceChecker := space.NewChecker(*dbPath, &store)
 
@@ -50,11 +51,11 @@ func main() {
 	gc := garbagecollect.NewScheduler(&collector, 7*time.Hour)
 	gc.StartAsync()
 
-	clock := handlers.NewClock()
+	server := handlers.New(authenticator, &store, spaceChecker.Check, &collector, time.Now)
 
-	server := handlers.New(authenticator, &store, spaceChecker, &collector, &clock)
-
-	h := gorilla.LoggingHandler(os.Stdout, server.Router())
+	// CrossOriginProtection rejects non-safe cross-origin requests to prevent CSRF.
+	protectedRouter := http.NewCrossOriginProtection().Handler(server.Router())
+	h := gorilla.LoggingHandler(os.Stdout, protectedRouter)
 	if os.Getenv("PS_BEHIND_PROXY") != "" {
 		h = gorilla.ProxyIPHeadersHandler(h)
 	}
@@ -63,11 +64,15 @@ func main() {
 	if port == "" {
 		port = "4001"
 	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "localhost"
+	}
 
 	stop := setupSignalHandler()
 	httpSrv := http.Server{Addr: fmt.Sprintf(":%s", port), Handler: h}
 	go func() {
-		log.Printf("listening on %s", port)
+		log.Printf("listening on http://%s:%s", hostname, port)
 		log.Printf("http server exit: %s", httpSrv.ListenAndServe())
 	}()
 	<-stop
@@ -79,19 +84,34 @@ func main() {
 	}
 }
 
-func sharedSecretFromEnv() (string, error) {
+func sharedSecretFromEnv() (shared_secret.SharedSecretAuthenticator, error) {
 	if path := os.Getenv("PS_SHARED_SECRET_FILE"); path != "" {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return "", fmt.Errorf("reading PS_SHARED_SECRET_FILE: %w", err)
-		}
-		return strings.TrimRight(string(data), "\r\n"), nil
+		return sharedSecretFromFile(path)
 	}
 	secret := os.Getenv("PS_SHARED_SECRET")
 	if secret == "" {
-		return "", fmt.Errorf("PS_SHARED_SECRET or PS_SHARED_SECRET_FILE must be set")
+		return shared_secret.SharedSecretAuthenticator{},
+			fmt.Errorf("PS_SHARED_SECRET or PS_SHARED_SECRET_FILE must be set")
 	}
-	return secret, nil
+	passphrase, err := picoshare.NewPassphrase(secret)
+	if err != nil {
+		return shared_secret.SharedSecretAuthenticator{}, fmt.Errorf("invalid PS_SHARED_SECRET: %w", err)
+	}
+	return shared_secret.New(passphrase), nil
+}
+
+func sharedSecretFromFile(path string) (shared_secret.SharedSecretAuthenticator, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return shared_secret.SharedSecretAuthenticator{}, fmt.Errorf("failed to read PS_SHARED_SECRET_FILE: %w", err)
+	}
+
+	stripped := strings.TrimRight(string(data), "\r\n")
+	passphrase, err := picoshare.NewPassphrase(stripped)
+	if err != nil {
+		return shared_secret.SharedSecretAuthenticator{}, fmt.Errorf("invalid PS_SHARED_SECRET_FILE: %w", err)
+	}
+	return shared_secret.New(passphrase), nil
 }
 
 func ensureDirExists(dir string) {

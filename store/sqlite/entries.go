@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"log"
 
@@ -12,7 +13,7 @@ import (
 )
 
 func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
-	rows, err := s.ctx.Query(`
+	rows, err := s.db.Query(`
 	SELECT
 		entries.id AS id,
 		entries.filename AS filename,
@@ -49,6 +50,10 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 		if err = rows.Scan(&id, &filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &fileSizeRaw); err != nil {
 			return []picoshare.UploadMetadata{}, err
 		}
+		entryID, err := picoshare.EntryIDFromString(id)
+		if err != nil {
+			return []picoshare.UploadMetadata{}, fmt.Errorf("failed to parse entry ID from database: %w", err)
+		}
 
 		ut, err := parseDatetime(uploadTimeRaw)
 		if err != nil {
@@ -59,6 +64,10 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 		if err != nil {
 			return []picoshare.UploadMetadata{}, err
 		}
+		expiration, err := picoshare.NewExpirationTime(et)
+		if err != nil {
+			return []picoshare.UploadMetadata{}, fmt.Errorf("failed to parse expiration time from database: %w", err)
+		}
 
 		fileSize, err := picoshare.FileSizeFromUint64(fileSizeRaw)
 		if err != nil {
@@ -66,12 +75,12 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 		}
 
 		ee = append(ee, picoshare.UploadMetadata{
-			ID:          picoshare.EntryID(id),
+			ID:          entryID,
 			Filename:    picoshare.Filename(filename),
 			Note:        picoshare.FileNote{Value: note},
 			ContentType: picoshare.ContentType(contentType),
 			Uploaded:    ut,
-			Expires:     picoshare.ExpirationTime(et),
+			Expires:     expiration,
 			Size:        fileSize,
 		})
 	}
@@ -80,7 +89,7 @@ func (s Store) GetEntriesMetadata() ([]picoshare.UploadMetadata, error) {
 }
 
 func (s Store) ReadEntryFile(id picoshare.EntryID) (io.ReadSeeker, error) {
-	r, err := file.NewReader(s.ctx, id)
+	r, err := file.NewReader(s.db, id)
 	if err != nil {
 		return nil, err
 	}
@@ -94,15 +103,17 @@ func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata,
 	var contentType string
 	var uploadTimeRaw string
 	var expirationTimeRaw string
+	var downloadPassphraseRaw *string
 	var fileSizeRaw uint64
 	var guestLinkID *picoshare.GuestLinkID
-	err := s.ctx.QueryRow(`
+	err := s.db.QueryRow(`
 	SELECT
 		entries.filename AS filename,
 		entries.note AS note,
 		entries.content_type AS content_type,
 		entries.upload_time AS upload_time,
 		entries.expiration_time AS expiration_time,
+		entries.download_passphrase AS download_passphrase,
 		sizes.file_size AS file_size,
 		entries.guest_link_id AS guest_link_id
 	FROM
@@ -118,7 +129,7 @@ func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata,
 				id
 		) sizes ON entries.id = sizes.id
 	WHERE
-		entries.id = :entry_id`, sql.Named("entry_id", id)).Scan(&filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &fileSizeRaw, &guestLinkID)
+		entries.id = :entry_id`, sql.Named("entry_id", id.String())).Scan(&filename, &note, &contentType, &uploadTimeRaw, &expirationTimeRaw, &downloadPassphraseRaw, &fileSizeRaw, &guestLinkID)
 	if err == sql.ErrNoRows {
 		return picoshare.UploadMetadata{}, store.EntryNotFoundError{ID: id}
 	} else if err != nil {
@@ -142,21 +153,30 @@ func (s Store) GetEntryMetadata(id picoshare.EntryID) (picoshare.UploadMetadata,
 	if err != nil {
 		return picoshare.UploadMetadata{}, err
 	}
+	expiration, err := picoshare.NewExpirationTime(et)
+	if err != nil {
+		return picoshare.UploadMetadata{}, fmt.Errorf("failed to parse expiration time from database: %w", err)
+	}
 
 	fileSize, err := picoshare.FileSizeFromUint64(fileSizeRaw)
 	if err != nil {
 		return picoshare.UploadMetadata{}, err
 	}
+	downloadPassphrase, err := parseDownloadPassphrase(downloadPassphraseRaw)
+	if err != nil {
+		return picoshare.UploadMetadata{}, err
+	}
 
 	return picoshare.UploadMetadata{
-		ID:          id,
-		Filename:    picoshare.Filename(filename),
-		GuestLink:   guestLink,
-		Note:        picoshare.FileNote{Value: note},
-		ContentType: picoshare.ContentType(contentType),
-		Uploaded:    ut,
-		Expires:     picoshare.ExpirationTime(et),
-		Size:        fileSize,
+		ID:                 id,
+		Filename:           picoshare.Filename(filename),
+		GuestLink:          guestLink,
+		Note:               picoshare.FileNote{Value: note},
+		ContentType:        picoshare.ContentType(contentType),
+		Uploaded:           ut,
+		Expires:            expiration,
+		Size:               fileSize,
+		DownloadPassphrase: downloadPassphrase,
 	}, nil
 }
 
@@ -167,7 +187,7 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 	// we can end up in a state with orphaned entries data. We clean it up in
 	// Purge().
 	// See: https://github.com/mtlynch/picoshare/issues/284
-	w := file.NewWriter(s.ctx, metadata.ID, s.chunkSize, 0)
+	w := file.NewWriter(s.db, metadata.ID, s.chunkSize, 0)
 	if _, err := io.Copy(w, reader); err != nil {
 		return err
 	}
@@ -177,7 +197,7 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 		return err
 	}
 
-	_, err := s.ctx.Exec(`
+	_, err := s.db.Exec(`
 	INSERT INTO
 		entries
 	(
@@ -187,16 +207,18 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 		note,
 		content_type,
 		upload_time,
-		expiration_time
+		expiration_time,
+		download_passphrase
 	)
-	VALUES(:entry_id, NULLIF(:guest_link_id, ''), :filename, :note, :content_type, :upload_time, :expiration_time)`,
-		sql.Named("entry_id", metadata.ID),
+	VALUES(:entry_id, NULLIF(:guest_link_id, ''), :filename, :note, :content_type, :upload_time, :expiration_time, :download_passphrase)`,
+		sql.Named("entry_id", metadata.ID.String()),
 		sql.Named("guest_link_id", metadata.GuestLink.ID),
 		sql.Named("filename", metadata.Filename),
 		sql.Named("note", metadata.Note.Value),
 		sql.Named("content_type", metadata.ContentType),
 		sql.Named("upload_time", formatTime(metadata.Uploaded)),
 		sql.Named("expiration_time", formatExpirationTime(metadata.Expires)),
+		sql.Named("download_passphrase", downloadPassphraseString(metadata.DownloadPassphrase)),
 	)
 	if err != nil {
 		log.Printf("insert into entries table failed, aborting transaction: %v", err)
@@ -209,7 +231,7 @@ func (s Store) InsertEntry(reader io.Reader, metadata picoshare.UploadMetadata) 
 func (s Store) InsertChunkedEntry(reader io.Reader, metadata picoshare.UploadMetadata) error {
 	log.Printf("saving new entry %s", metadata.ID)
 
-	_, err := s.ctx.Exec(`
+	_, err := s.db.Exec(`
 	INSERT INTO
 		entries
 	(
@@ -219,16 +241,18 @@ func (s Store) InsertChunkedEntry(reader io.Reader, metadata picoshare.UploadMet
 		note,
 		content_type,
 		upload_time,
-		expiration_time
+		expiration_time,
+		download_passphrase
 	)
-	VALUES(:entry_id, :guest_link_id, :filename, :note, :content_type, :upload_time, :expiration_time)`,
-		sql.Named("entry_id", metadata.ID),
+	VALUES(:entry_id, :guest_link_id, :filename, :note, :content_type, :upload_time, :expiration_time, :download_passphrase)`,
+		sql.Named("entry_id", metadata.ID.String()),
 		sql.Named("guest_link_id", metadata.GuestLink.ID),
 		sql.Named("filename", metadata.Filename),
 		sql.Named("note", metadata.Note.Value),
 		sql.Named("content_type", metadata.ContentType),
 		sql.Named("upload_time", formatTime(metadata.Uploaded)),
 		sql.Named("expiration_time", formatExpirationTime(metadata.Expires)),
+		sql.Named("download_passphrase", downloadPassphraseString(metadata.DownloadPassphrase)),
 	)
 	if err != nil {
 		log.Printf("insert into entries table failed, aborting transaction: %v", err)
@@ -242,13 +266,13 @@ func (s Store) UploadChunk(reader io.Reader, id picoshare.EntryID) error {
 	log.Printf("Uploading chunk for %s", id)
 
 	offset := 0
-	rows, err := s.ctx.Query("SELECT chunk_index FROM entries_data WHERE id = ? ORDER BY chunk_index DESC LIMIT 1", id)
+	rows, err := s.db.Query("SELECT chunk_index FROM entries_data WHERE id = ? ORDER BY chunk_index DESC LIMIT 1", id.String())
 	if err == nil && rows.Next() {
 		rows.Scan(&offset)
 		offset++
 	}
 
-	w := file.NewWriter(s.ctx, id, s.chunkSize, offset)
+	w := file.NewWriter(s.db, id, s.chunkSize, offset)
 	if _, err := io.Copy(w, reader); err != nil {
 		return err
 	}
@@ -261,21 +285,37 @@ func (s Store) UploadChunk(reader io.Reader, id picoshare.EntryID) error {
 	return nil
 }
 
+func parseDownloadPassphrase(raw *string) (picoshare.DownloadPassphrase, error) {
+	if raw == nil {
+		return picoshare.DownloadPassphrase{}, nil
+	}
+	return picoshare.NewDownloadPassphrase(*raw)
+}
+
+func downloadPassphraseString(passphrase picoshare.DownloadPassphrase) *string {
+	if passphrase.Empty() {
+		return nil
+	}
+	return new(passphrase.String())
+}
+
 func (s Store) UpdateEntryMetadata(id picoshare.EntryID, metadata picoshare.UploadMetadata) error {
 	log.Printf("updating metadata for entry %s", id)
 
-	res, err := s.ctx.Exec(`
+	res, err := s.db.Exec(`
 	UPDATE entries
 	SET
 		filename = :filename,
 		expiration_time = :expiration_time,
-		note = :note
+		note = :note,
+		download_passphrase = :download_passphrase
 	WHERE
 		id = :entry_id`,
 		sql.Named("filename", metadata.Filename),
 		sql.Named("expiration_time", formatExpirationTime(metadata.Expires)),
 		sql.Named("note", metadata.Note.Value),
-		sql.Named("entry_id", id))
+		sql.Named("download_passphrase", downloadPassphraseString(metadata.DownloadPassphrase)),
+		sql.Named("entry_id", id.String()))
 	if err != nil {
 		return err
 	}
@@ -294,7 +334,7 @@ func (s Store) UpdateEntryMetadata(id picoshare.EntryID, metadata picoshare.Uplo
 func (s Store) DeleteEntry(id picoshare.EntryID) error {
 	log.Printf("deleting entry %v", id)
 
-	tx, err := s.ctx.BeginTx(context.Background(), nil)
+	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
@@ -309,7 +349,7 @@ func (s Store) DeleteEntry(id picoshare.EntryID) error {
 	DELETE FROM
 		downloads
 	WHERE
-		entry_id = :entry_id`, sql.Named("entry_id", id)); err != nil {
+		entry_id = :entry_id`, sql.Named("entry_id", id.String())); err != nil {
 		log.Printf("delete from downloads table failed, aborting transaction: %v", err)
 		return err
 	}
@@ -318,7 +358,7 @@ func (s Store) DeleteEntry(id picoshare.EntryID) error {
 	DELETE FROM
 		entries_data
 	WHERE
-		id = :entry_id`, sql.Named("entry_id", id)); err != nil {
+		id = :entry_id`, sql.Named("entry_id", id.String())); err != nil {
 		log.Printf("delete from entries_data table failed, aborting transaction: %v", err)
 		return err
 	}
@@ -327,7 +367,7 @@ func (s Store) DeleteEntry(id picoshare.EntryID) error {
 	DELETE FROM
 		entries
 	WHERE
-		id = :entry_id`, sql.Named("entry_id", id)); err != nil {
+		id = :entry_id`, sql.Named("entry_id", id.String())); err != nil {
 		log.Printf("delete from entries table failed, aborting transaction: %v", err)
 		return err
 	}

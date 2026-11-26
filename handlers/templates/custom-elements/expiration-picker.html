@@ -2,7 +2,7 @@
   <link
     rel="stylesheet"
     type="text/css"
-    href="/third-party/bootstrap@5.3.3/bootstrap.min.css"
+    href="/third-party/bootstrap@5.3.8/bootstrap.min.css"
   />
   <link
     rel="stylesheet"
@@ -35,7 +35,7 @@
       return new Date(
         date.getUTCFullYear(),
         date.getUTCMonth(),
-        date.getUTCDate()
+        date.getUTCDate(),
       );
     }
 
@@ -62,7 +62,7 @@
       class extends HTMLElement {
         connectedCallback() {
           this.attachShadow({ mode: "open" }).appendChild(
-            template.content.cloneNode(true)
+            template.content.cloneNode(true),
           );
           this.elements = {
             container: this.shadowRoot.querySelector(".mb-2"),
@@ -90,7 +90,7 @@
               this.elements.expirationInput.setCustomValidity("");
             } else {
               this.elements.expirationInput.setCustomValidity(
-                "Date must be in YYYY-MM-DD format"
+                "Date must be in YYYY-MM-DD format",
               );
               this.elements.expirationInput.reportValidity();
             }
@@ -143,7 +143,7 @@
         _defaultExpirationDate() {
           return dateInNDays(30);
         }
-      }
+      },
     );
   })();
 </script>

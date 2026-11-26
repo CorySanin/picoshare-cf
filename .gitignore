@@ -31,6 +31,7 @@ result*
 # Scratch directories for sharing data with AI agents.
 /reference
 /tmp
+/.claude
 
 # Temporary screenshots pasted into the root for AI agents.
 /image*.png

@@ -9,6 +9,15 @@
     const progressSpinner = document.getElementById("progress-spinner");
     const expireCheckbox = document.getElementById("expire-checkbox");
     const expirationPicker = document.getElementById("expiration-picker");
+    const requirePassphraseCheckbox = document.getElementById(
+      "require-passphrase-checkbox",
+    );
+    const downloadPassphraseFields = document.getElementById(
+      "download-passphrase-fields",
+    );
+    const downloadPassphraseInput = document.getElementById(
+      "download-passphrase",
+    );
 
     function readFilename() {
       return document.getElementById("filename").value || null;
@@ -16,6 +25,14 @@
 
     function readNote() {
       return document.getElementById("note").value || null;
+    }
+
+    function readDownloadPassphrase() {
+      // An empty passphrase tells the server to remove any existing passphrase.
+      if (!requirePassphraseCheckbox.checked) {
+        return "";
+      }
+      return downloadPassphraseInput.value;
     }
 
     document.getElementById("cancel-btn").addEventListener("click", () => {
@@ -35,7 +52,13 @@
       hideElement(editForm);
       showElement(progressSpinner);
 
-      editFile(id, readFilename(), expirationPicker.value, readNote())
+      editFile(
+        id,
+        readFilename(),
+        expirationPicker.value,
+        readNote(),
+        readDownloadPassphrase(),
+      )
         .then(() => {
           document.location = "/files";
         })
@@ -56,6 +79,17 @@
         disableElement(expirationPicker);
       }
     });
+
+    requirePassphraseCheckbox.addEventListener("change", () => {
+      // Requiring a passphrase means the user must enter one before the form
+      // submits.
+      downloadPassphraseInput.required = requirePassphraseCheckbox.checked;
+      if (requirePassphraseCheckbox.checked) {
+        showElement(downloadPassphraseFields);
+      } else {
+        hideElement(downloadPassphraseFields);
+      }
+    });
   </script>
 {{ end }}
 
@@ -67,65 +101,101 @@
   <h1 class="h1">Edit File</h1>
 
   {{ with .Metadata }}
-    <form id="edit-form" data-entry-id="{{ .ID }}">
-      <div class="mb-4">
-        <label class="form-label">Filename</label>
-        <input
-          id="filename"
-          class="form-control"
-          type="text"
-          value="{{ .Filename }}"
-          required
-        />
-      </div>
-
-      <div class="mb-4">
-        <label class="form-label">Expiration</label>
-
-        <div class="form-check mb-2">
+    <form id="edit-form" class="form-panel" data-entry-id="{{ .ID }}">
+      <div class="form-panel-body">
+        <div class="mb-4">
+          <label class="form-label" for="filename">Filename</label>
           <input
-            class="form-check-input"
-            type="checkbox"
-            id="expire-checkbox"
-            {{ if not (isNeverExpire .Expires) }}checked{{ end }}
+            id="filename"
+            class="form-control form-control-lg"
+            type="text"
+            value="{{ .Filename }}"
+            required
           />
-          <label class="form-check-label" for="expire-checkbox">
-            Delete after expiration
-          </label>
         </div>
-        <expiration-picker
-          id="expiration-picker"
-          class="d-block"
-          {{ if not (isNeverExpire .Expires) }}
-            value="{{ formatExpiration .Expires }}"
-          {{ else }}
-            disabled
-          {{ end }}
-        />
+
+        <fieldset class="mb-4">
+          <legend class="form-label">
+            <i class="fa-solid fa-clock fa-fw label-icon"></i>Expiration
+          </legend>
+
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="expire-checkbox"
+              {{ if not (isNeverExpire .Expires) }}checked{{ end }}
+            />
+            <label class="form-check-label" for="expire-checkbox">
+              Delete after expiration
+            </label>
+          </div>
+          <expiration-picker
+            id="expiration-picker"
+            class="dependent-field"
+            {{ if not (isNeverExpire .Expires) }}
+              value="{{ formatExpiration .Expires }}"
+            {{ else }}
+              disabled
+            {{ end }}
+          />
+        </fieldset>
+
+        <fieldset class="mb-4">
+          <legend class="form-label">
+            <i class="fa-solid fa-lock fa-fw label-icon"></i>Passphrase
+          </legend>
+
+          <div class="form-check">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="require-passphrase-checkbox"
+              {{ if not .DownloadPassphrase.Empty }}checked{{ end }}
+            />
+            <label class="form-check-label" for="require-passphrase-checkbox">
+              Require guests to enter a passphrase before downloading
+            </label>
+          </div>
+          <div
+            id="download-passphrase-fields"
+            {{ if not .DownloadPassphrase.Empty }}
+              class="dependent-field"
+            {{ else }}
+              class="dependent-field d-none"
+            {{ end }}
+          >
+            <input
+              id="download-passphrase"
+              class="form-control"
+              type="text"
+              autocomplete="off"
+              maxlength="{{ $.MaxPassphraseLength }}"
+              placeholder="Enter a passphrase"
+              {{ if not .DownloadPassphrase.Empty }}
+                value="{{ .DownloadPassphrase }}" required
+              {{ end }}
+            />
+          </div>
+        </fieldset>
+
+        <div>
+          <label class="form-label" for="note">
+            <i class="fa-solid fa-note-sticky fa-fw label-icon"></i>Note
+          </label>
+          <input
+            id="note"
+            class="form-control"
+            type="text"
+            {{ if .Note.Value }}
+              value="{{ .Note }}"
+            {{ end }}
+          />
+          <div class="form-text">Note is only visible to you</div>
+        </div>
       </div>
 
-      <div class="mb-4">
-        <label class="form-label">Note</label>
-        <input
-          id="note"
-          class="form-control"
-          type="text"
-          {{ if .Note.Value }}
-            value="{{ .Note }}"
-          {{ end }}
-        />
-        <p class="form-text">Note is only visible to you</p>
-      </div>
-
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <a
-          class="btn btn-danger me-auto"
-          role="button"
-          href="/files/{{ .ID }}/confirm-delete"
-        >
-          <i class="fa-solid fa-trash me-2"></i>
-          Delete
-        </a>
+      <div class="form-panel-footer">
         <button class="btn btn-outline-primary" id="cancel-btn" type="button">
           Cancel
         </button>
@@ -145,5 +215,16 @@
         <div id="error-message">Placeholder error.</div>
       </div>
     </div>
+
+    <section class="danger-zone">
+      <a
+        class="btn btn-outline-danger"
+        role="button"
+        href="/files/{{ .ID }}/confirm-delete"
+      >
+        <i class="fa-solid fa-trash me-2"></i>
+        Delete
+      </a>
+    </section>
   {{ end }}
 {{ end }}

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+
 	"github.com/mtlynch/picoshare/handlers/parse"
 	"github.com/mtlynch/picoshare/picoshare"
 	"github.com/mtlynch/picoshare/random"
@@ -35,9 +36,9 @@ func (s Server) guestLinksPost() http.HandlerFunc {
 		}
 
 		gl.ID = generateGuestLinkID()
-		gl.Created = s.clock.Now()
+		gl.Created = s.now()
 
-		if err := s.getDB(r).InsertGuestLink(gl); err != nil {
+		if err := s.store.InsertGuestLink(gl); err != nil {
 			log.Printf("failed to save guest link: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to save guest link: %v", err), http.StatusInternalServerError)
 			return
@@ -56,7 +57,7 @@ func (s Server) guestLinksDelete() http.HandlerFunc {
 			return
 		}
 
-		if err := s.getDB(r).DeleteGuestLink(id); err != nil {
+		if err := s.store.DeleteGuestLink(id); err != nil {
 			log.Printf("failed to delete guest link: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to delete guest link: %v", err), http.StatusInternalServerError)
 			return
@@ -73,7 +74,7 @@ func (s *Server) guestLinksEnableDisable() http.HandlerFunc {
 			return
 		}
 
-		if _, err := s.getDB(r).GetGuestLink(id); err != nil {
+		if _, err := s.store.GetGuestLink(id); err != nil {
 			log.Printf("failed to get guest link ID %s: %v", mux.Vars(r)["id"], err)
 			http.Error(w, fmt.Sprintf("Guest link with ID %s not found: %v", mux.Vars(r)["id"], err), http.StatusNotFound)
 			return
@@ -82,9 +83,9 @@ func (s *Server) guestLinksEnableDisable() http.HandlerFunc {
 		// Determine if client is enabling or disabling link.
 		var dbFn func(picoshare.GuestLinkID) error
 		if strings.HasSuffix(r.URL.Path, "/enable") {
-			dbFn = s.getDB(r).EnableGuestLink
+			dbFn = s.store.EnableGuestLink
 		} else {
-			dbFn = s.getDB(r).DisableGuestLink
+			dbFn = s.store.DisableGuestLink
 		}
 
 		if err := dbFn(id); err != nil {
@@ -116,7 +117,7 @@ func (s Server) guestLinkFromRequest(r *http.Request) (picoshare.GuestLink, erro
 		return picoshare.GuestLink{}, err
 	}
 
-	urlExpiration, err := parse.Expiration(payload.UrlExpiration, s.clock.Now())
+	urlExpiration, err := parse.Expiration(payload.UrlExpiration, s.now())
 	if err != nil {
 		return picoshare.GuestLink{}, err
 	}

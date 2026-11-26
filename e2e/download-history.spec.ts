@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { login } from "./helpers/login";
 
 const browserColumn = 3;
@@ -16,7 +16,7 @@ test("upload a file and verify it has no download history", async ({
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -38,7 +38,7 @@ test("upload a file and verify it has no download history", async ({
 
   await expect(page).toHaveURL(/\/files\/.+\/downloads$/);
   await expect(
-    page.getByRole("heading", { name: "simple-upload.txt" })
+    page.getByRole("heading", { name: "simple-upload.txt" }),
   ).toBeVisible();
 
   await expect(page.getByText("No downloads yet.")).toBeVisible();
@@ -58,7 +58,7 @@ test("upload a file, download it, and verify it has a download history", async (
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.locator("#result-links a").first().click();
@@ -82,7 +82,7 @@ test("upload a file, download it, and verify it has a download history", async (
     page
       .locator("section")
       .filter({ has: page.getByRole("heading", { name: "Downloads" }) })
-      .locator(".value")
+      .locator(".value"),
   ).toHaveText("1 (History)");
   await page
     .locator("section")
@@ -92,7 +92,7 @@ test("upload a file, download it, and verify it has a download history", async (
 
   await expect(page).toHaveURL(/\/files\/.+\/downloads$/);
   await expect(
-    page.getByRole("heading", { name: "simple-upload.txt" })
+    page.getByRole("heading", { name: "simple-upload.txt" }),
   ).toBeVisible();
 
   // We expect one header row + one body row.
@@ -114,7 +114,7 @@ test("upload a file, download it, and verify it has a download history", async (
       .getByRole("row")
       .last()
       .getByRole("cell")
-      .nth(browserColumn)
+      .nth(browserColumn),
   ).toHaveText(browserNameExpected);
 });
 
@@ -130,12 +130,12 @@ test("filter downloads to unique IPs only", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.locator("#result-links a").first().click();
   await expect(
-    page.getByText("File for testing unique IP filtering")
+    page.getByText("File for testing unique IP filtering"),
   ).toBeVisible();
   // Force a second download.
   await page.reload();
@@ -185,7 +185,7 @@ test("filter downloads to unique IPs only", async ({ page }) => {
 
   // Verify download number is correct (should show "1").
   await expect(
-    page.getByRole("table").getByRole("row").nth(1).getByRole("cell").first()
+    page.getByRole("table").getByRole("row").nth(1).getByRole("cell").first(),
   ).toHaveText("1");
 
   // Uncheck the checkbox.

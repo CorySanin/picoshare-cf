@@ -122,6 +122,7 @@ You can adjust behavior of the Docker container by specifying these Docker-speci
 | `LITESTREAM_ENDPOINT`          | Litestream-compatible cloud storage endpoint where Litestream should replicate data.                  |
 | `LITESTREAM_ACCESS_KEY_ID`     | Litestream-compatible cloud storage access key ID to the bucket where you want to replicate data.     |
 | `LITESTREAM_SECRET_ACCESS_KEY` | Litestream-compatible cloud storage secret access key to the bucket where you want to replicate data. |
+| `LITESTREAM_PATH`              | Path within the Litestream bucket where Litestream should replicate data (defaults to `db`).          |
 | `LITESTREAM_RETENTION`         | The amount of time Litestream snapshots & WAL files will be kept (defaults to 72h).                   |
 
 ### Docker build args
@@ -130,7 +131,7 @@ If you rebuild the Docker image from source, you can adjust the build behavior w
 
 | Build Arg            | Meaning                                                                     | Default Value |
 | -------------------- | --------------------------------------------------------------------------- | ------------- |
-| `litestream_version` | Version of [Litestream](https://litestream.io/) to use for data replication | `0.3.9`       |
+| `litestream_version` | Version of [Litestream](https://litestream.io/) to use for data replication | `0.3.13`      |
 
 ## PicoShare's scope and future
 
@@ -143,6 +144,12 @@ Due to time limitations, I keep PicoShare's scope limited to only the features t
 PicoShare is easy to deploy to cloud hosting platforms:
 
 - [fly.io](docs/deployment/fly.io.md)
+
+## Third-party clients
+
+These clients are built and maintained by third parties, not by the PicoShare project:
+
+- [picaroa](https://www.picaroa.app) - Native iOS client for PicoShare
 
 ## Tips and tricks
 

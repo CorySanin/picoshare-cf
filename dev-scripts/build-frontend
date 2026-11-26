@@ -10,5 +10,9 @@ set -x
 set -u
 
 ./node_modules/.bin/prettier --check .
-./node_modules/.bin/eslint "handlers/static/js/**/*.js"
+./node_modules/.bin/tsc --noEmit --project e2e
+mapfile -t frontend_files < <(
+  git ls-files -- '*.js' '*.ts' 'handlers/templates/**/*.html'
+)
+./node_modules/.bin/eslint --no-warn-ignored "${frontend_files[@]}"
 ./node_modules/.bin/mocha --recursive handlers/static/js/.tests/*.test.js

@@ -97,7 +97,7 @@
           .then(() =>
             document
               .querySelector("snackbar-notifications")
-              .addInfoMessage("Copied link")
+              .addInfoMessage("Copied link"),
           )
           .catch((error) => {
             document.getElementById("error-message").innerText = error;
@@ -111,7 +111,6 @@
       .querySelectorAll('[aria-label="Enable"], [aria-label="Disable"]')
       .forEach((toggleBtn) => {
         toggleBtn.addEventListener("click", () => {
-          const currentState = toggleBtn.getAttribute("aria-label");
           const id = toggleBtn.getAttribute("pico-link-id");
 
           let apiCall = undefined;

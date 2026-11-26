@@ -17,10 +17,10 @@
     const defaultExpiration = document.getElementById("default-expiration");
     const timeUnit = document.getElementById("time-unit");
     const storeForeverCheckbox = document.getElementById(
-      "store-forever-checkbox"
+      "store-forever-checkbox",
     );
     const saveBtn = document.querySelector(
-      "#settings-form button[type='submit']"
+      "#settings-form button[type='submit']",
     );
 
     const daysPerYear = 365;
@@ -55,7 +55,7 @@
       } else {
         defaultExpiration.setAttribute(
           "max",
-          daysPerYear * maxExpirationInYears
+          daysPerYear * maxExpirationInYears,
         );
       }
       enableElement(saveBtn);

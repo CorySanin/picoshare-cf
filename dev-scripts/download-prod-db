@@ -29,6 +29,7 @@ export LITESTREAM_ENDPOINT
 export LITESTREAM_ACCESS_KEY_ID
 export LITESTREAM_SECRET_ACCESS_KEY
 export LITESTREAM_BUCKET
+export LITESTREAM_PATH
 
 # Export DB_PATH so that litestream uses the variable to populate
 # litestream.yml.

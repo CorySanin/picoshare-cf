@@ -5,7 +5,7 @@ executors:
       - image: cimg/base:stable
   go:
     docker:
-      - image: cimg/go:1.26.0
+      - image: cimg/go:1.26.1
 jobs:
   check_whitespace:
     executor: base
@@ -40,7 +40,7 @@ jobs:
           command: ./dev-scripts/lint-sql
   check_frontend:
     docker:
-      - image: cimg/node:20.6.1
+      - image: cimg/node:24.11.1
     steps:
       - checkout
       - run:

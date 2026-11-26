@@ -24,7 +24,7 @@ describe("sortClipboardItems", () => {
           kind: "file",
           type: "image/png",
         },
-      ])
+      ]),
     );
 
     assert.deepEqual(
@@ -47,7 +47,7 @@ describe("sortClipboardItems", () => {
           kind: "string",
           type: "text/html",
         },
-      ])
+      ]),
     );
   });
 
@@ -72,7 +72,7 @@ describe("sortClipboardItems", () => {
           kind: "string",
           type: "text/html",
         },
-      ])
+      ]),
     );
 
     assert.deepEqual(
@@ -95,7 +95,7 @@ describe("sortClipboardItems", () => {
           kind: "string",
           type: "text/plain",
         },
-      ])
+      ]),
     );
   });
 });

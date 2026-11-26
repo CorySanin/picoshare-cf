@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { login } from "./helpers/login";
 
 test("default file expiration is 30 days", async ({ page }) => {
@@ -9,7 +9,7 @@ test("default file expiration is 30 days", async ({ page }) => {
   await expect(page).toHaveURL("/settings");
 
   await expect(
-    page.getByRole("checkbox", { name: "Store files forever" })
+    page.getByRole("checkbox", { name: "Store files forever" }),
   ).not.toBeChecked();
 
   await expect(page.locator("#default-expiration")).toHaveValue("30");
@@ -19,7 +19,7 @@ test("default file expiration is 30 days", async ({ page }) => {
   await expect(page).toHaveURL("/");
 
   await expect(page.locator("#expiration-select option[selected]")).toHaveText(
-    "30 days"
+    "30 days",
   );
 });
 
@@ -31,7 +31,7 @@ test("changes default file expiration to 5 days", async ({ page }) => {
   await expect(page).toHaveURL("/settings");
 
   await expect(
-    page.getByRole("checkbox", { name: "Store files forever" })
+    page.getByRole("checkbox", { name: "Store files forever" }),
   ).not.toBeChecked();
 
   await page.locator("#default-expiration").fill("5");
@@ -41,7 +41,7 @@ test("changes default file expiration to 5 days", async ({ page }) => {
   await expect(page).toHaveURL("/");
 
   await expect(page.locator("#expiration-select option[selected]")).toHaveText(
-    "5 days"
+    "5 days",
   );
 });
 
@@ -53,7 +53,7 @@ test("changes default file expiration to 1 year", async ({ page }) => {
   await expect(page).toHaveURL("/settings");
 
   await expect(
-    page.getByRole("checkbox", { name: "Store files forever" })
+    page.getByRole("checkbox", { name: "Store files forever" }),
   ).not.toBeChecked();
 
   await page.locator("#default-expiration").fill("1");
@@ -64,7 +64,7 @@ test("changes default file expiration to 1 year", async ({ page }) => {
   await expect(page).toHaveURL("/");
 
   await expect(page.locator("#expiration-select option[selected]")).toHaveText(
-    "1 year"
+    "1 year",
   );
 
   // Because 1 year is one of the built-in defaults, we shouldn't see any
@@ -88,7 +88,7 @@ test("changes default file expiration to 10 years", async ({ page }) => {
   await expect(page).toHaveURL("/settings");
 
   await expect(
-    page.getByRole("checkbox", { name: "Store files forever" })
+    page.getByRole("checkbox", { name: "Store files forever" }),
   ).not.toBeChecked();
 
   // Change default expiration to 10 years.
@@ -100,7 +100,7 @@ test("changes default file expiration to 10 years", async ({ page }) => {
   await expect(page).toHaveURL("/");
 
   await expect(page.locator("#expiration-select option[selected]")).toHaveText(
-    "10 years"
+    "10 years",
   );
 });
 
@@ -119,7 +119,7 @@ test("changes default file expiration to never", async ({ page }) => {
 
   await page.reload();
   await expect(
-    page.getByRole("checkbox", { name: "Store files forever" })
+    page.getByRole("checkbox", { name: "Store files forever" }),
   ).toBeChecked();
   await expect(page.locator("id=default-expiration")).toBeDisabled();
   await expect(page.locator("id=default-expiration")).toHaveValue("30");
@@ -130,7 +130,7 @@ test("changes default file expiration to never", async ({ page }) => {
   await expect(page).toHaveURL("/");
 
   await expect(page.locator("#expiration-select option[selected]")).toHaveText(
-    "Never"
+    "Never",
   );
 
   // Because Never is one of the built-in defaults, we shouldn't see any

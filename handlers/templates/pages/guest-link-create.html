@@ -7,13 +7,13 @@
     const labelInput = document.getElementById("label");
     const expirationSelect = document.getElementById("expiration-select");
     const fileExpirationSelect = document.getElementById(
-      "file-expiration-select"
+      "file-expiration-select",
     );
     const maxFileBytesInput = document.getElementById("max-file-size");
     const fileUploadLimitInput = document.getElementById("file-upload-limit");
     const createLinkForm = document.getElementById("create-guest-link-form");
     const createBtn = document.querySelector(
-      "#create-guest-link-form button[type='submit']"
+      "#create-guest-link-form button[type='submit']",
     );
     const errorContainer = document.getElementById("error");
     const progressSpinner = document.getElementById("progress-spinner");
@@ -49,7 +49,7 @@
         guestLink.urlExpirationTime,
         guestLink.fileLifetime,
         guestLink.maxFileBytes,
-        guestLink.maxFileUploads
+        guestLink.maxFileUploads,
       )
         .then(() => {
           document.location = "/guest-links";

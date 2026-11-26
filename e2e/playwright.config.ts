@@ -1,10 +1,14 @@
+import os from "node:os";
 import type { PlaywrightTestConfig } from "@playwright/test";
 import { devices } from "@playwright/test";
-import { fileURLToPath } from "url";
 
-const globalSetupPath = fileURLToPath(
-  new URL("./helpers/global-setup", import.meta.url)
-);
+// Sandboxed builders may allot fewer cores than the host reports, so trust the
+// builder's declared capacity when it's available.
+const declaredCores = Number(process.env.NIX_BUILD_CORES);
+const availableCores =
+  Number.isInteger(declaredCores) && declaredCores > 0
+    ? declaredCores
+    : os.availableParallelism();
 
 const config: PlaywrightTestConfig = {
   testDir: "./",
@@ -16,11 +20,11 @@ const config: PlaywrightTestConfig = {
   forbidOnly: !!process.env.CI,
   // Retry on CI only.
   retries: process.env.CI ? 2 : 0,
-  workers: undefined,
+  // Concurrent browsers starve each other before the five-second assertion
+  // timeout when workers exceed the available cores.
+  workers: Math.min(availableCores, 4),
   reporter: "html",
-  globalSetup: globalSetupPath,
   use: {
-    baseURL: "http://localhost:6001",
     actionTimeout: 0,
     trace: "on",
     video: "on",
@@ -40,11 +44,6 @@ const config: PlaywrightTestConfig = {
   ],
 
   outputDir: "results/",
-
-  webServer: {
-    command: "PS_SHARED_SECRET=dummypass PORT=6001 TZ=UTC ../bin/picoshare-dev",
-    port: 6001,
-  },
 };
 
 export default config;

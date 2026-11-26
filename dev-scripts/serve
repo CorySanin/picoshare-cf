@@ -14,11 +14,19 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 readonly SCRIPT_DIR
 cd "${SCRIPT_DIR}/.."
 
+GOBIN="$(go env GOBIN)"
+if [[ -z "${GOBIN}" ]]; then
+  GOBIN="$(go env GOPATH)/bin"
+fi
+readonly GOBIN
+
 # Install air if it's not present.
-if ! command -v air &> /dev/null; then
-    readonly AIR_VERSION="v1.61.7"
-    go install "github.com/air-verse/air@${AIR_VERSION}"
+AIR_PATH="${GOBIN}/air"
+readonly AIR_PATH
+readonly AIR_VERSION="v1.67.4"
+if [[ ! -f "${AIR_PATH}" ]]; then
+  CGO_ENABLED=0 go install "github.com/air-verse/air@${AIR_VERSION}"
 fi
 
 # Run air for hot reloading.
-air
+"${AIR_PATH}"

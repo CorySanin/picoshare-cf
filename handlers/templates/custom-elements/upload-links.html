@@ -23,7 +23,7 @@
       class extends HTMLElement {
         connectedCallback() {
           this.attachShadow({ mode: "open" }).appendChild(
-            template.content.cloneNode(true)
+            template.content.cloneNode(true),
           );
           this.resetLinks();
         }
@@ -55,10 +55,10 @@
           this.shadowRoot.getElementById("verbose-link-box").href =
             makeVerboseLink(this.fileId, this.filename);
           this.shadowRoot.getElementById("short-link-box").href = makeShortLink(
-            this.fileId
+            this.fileId,
           );
         }
-      }
+      },
     );
   })();
 </script>

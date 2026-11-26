@@ -12,7 +12,7 @@ const settingsRowID = 1
 
 func (s Store) ReadSettings() (picoshare.Settings, error) {
 	var expirationInDays uint16
-	if err := s.ctx.QueryRow(`
+	if err := s.db.QueryRow(`
    SELECT
    	default_expiration_in_days
    FROM
@@ -33,7 +33,7 @@ func (s Store) ReadSettings() (picoshare.Settings, error) {
 func (s Store) UpdateSettings(settings picoshare.Settings) error {
 	log.Printf("saving new settings: %s", settings)
 	expirationInDays := settings.DefaultFileLifetime.Days()
-	if _, err := s.ctx.Exec(`
+	if _, err := s.db.Exec(`
    UPDATE
    	settings
    SET

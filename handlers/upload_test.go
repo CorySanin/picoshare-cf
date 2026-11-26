@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -19,9 +20,20 @@ import (
 	"github.com/mtlynch/picoshare/handlers/parse"
 	"github.com/mtlynch/picoshare/picoshare"
 	"github.com/mtlynch/picoshare/store/test_sqlite"
+	"github.com/mtlynch/picoshare/testutil"
 )
 
 type mockAuthenticator struct{}
+
+type brokenPipeResponseWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (w brokenPipeResponseWriter) Write([]byte) (int, error) {
+	// Match net/http by committing the status before the connection write fails.
+	w.WriteHeader(http.StatusOK)
+	return 0, syscall.EPIPE
+}
 
 func (ma mockAuthenticator) StartSession(w http.ResponseWriter, r *http.Request) {}
 
@@ -31,22 +43,15 @@ func (ma mockAuthenticator) Authenticate(r *http.Request) bool {
 	return true
 }
 
-type mockClock struct {
-	t time.Time
-}
-
-func (c mockClock) Now() time.Time {
-	return c.t
-}
-
 func TestEntryPost(t *testing.T) {
 	for _, tt := range []struct {
-		description string
-		filename    string
-		contents    string
-		expiration  string
-		note        string
-		status      int
+		description        string
+		filename           string
+		contents           string
+		expiration         string
+		note               string
+		downloadPassphrase string
+		status             int
 	}{
 		{
 			description: "valid file with no note",
@@ -62,6 +67,22 @@ func TestEntryPost(t *testing.T) {
 			note:        "for my homeboy, willy",
 			expiration:  "2040-01-01T00:00:00Z",
 			status:      http.StatusOK,
+		},
+		{
+			description:        "valid file with a download passphrase",
+			filename:           "dummyimage.png",
+			contents:           "dummy bytes",
+			downloadPassphrase: "correct horse battery staple",
+			expiration:         "2040-01-01T00:00:00Z",
+			status:             http.StatusOK,
+		},
+		{
+			description:        "invalid download passphrase is rejected",
+			filename:           "dummyimage.png",
+			contents:           "dummy bytes",
+			downloadPassphrase: strings.Repeat("a", picoshare.MaxPassphraseLength+1),
+			expiration:         "2040-01-01T00:00:00Z",
+			status:             http.StatusBadRequest,
 		},
 		{
 			description: "valid file with a too-long note",
@@ -101,10 +122,10 @@ func TestEntryPost(t *testing.T) {
 		},
 	} {
 		t.Run(tt.description, func(t *testing.T) {
-			dataStore := test_sqlite.New()
-			s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
+			dataStore := test_sqlite.New(t)
+			s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, time.Now)
 
-			formData, contentType := createMultipartFormBody(tt.filename, tt.note, bytes.NewBuffer([]byte(tt.contents)))
+			formData, contentType := createMultipartFormBody(tt.filename, tt.note, tt.downloadPassphrase, bytes.NewBuffer([]byte(tt.contents)))
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -137,7 +158,7 @@ func TestEntryPost(t *testing.T) {
 				t.Fatalf("response is not valid JSON: %v", body)
 			}
 
-			entry, err := dataStore.GetEntryMetadata(picoshare.EntryID(response.ID))
+			entry, err := dataStore.GetEntryMetadata(picoshare.MustCreateEntryID(response.ID))
 			if err != nil {
 				t.Fatalf("failed to get expected entry %v from data store: %v", response.ID, err)
 			}
@@ -146,8 +167,12 @@ func TestEntryPost(t *testing.T) {
 				t.Errorf("filename=%v, want=%v", got, want)
 			}
 
-			if got, want := entry.Expires, mustParseExpirationTime(tt.expiration); got != want {
+			if got, want := entry.Expires, testutil.MustParseExpirationTime(t, tt.expiration); got != want {
 				t.Errorf("expiration=%v, want=%v", got, want)
+			}
+
+			if got, want := downloadPassphraseToString(entry.DownloadPassphrase), tt.downloadPassphrase; got != want {
+				t.Errorf("download passphrase=%q, want=%q", got, want)
 			}
 
 			entryFile, err := dataStore.ReadEntryFile(entry.ID)
@@ -163,51 +188,66 @@ func TestEntryPost(t *testing.T) {
 }
 
 func TestEntryPut(t *testing.T) {
-	originalEntry := picoshare.UploadMetadata{
-		ID:          picoshare.EntryID("AAAAAAAAAA"),
-		Filename:    picoshare.Filename("original-filename.mp3"),
-		ContentType: picoshare.ContentType("audio/mpeg"),
-		Uploaded:    mustParseTime("2023-01-01T00:00:00Z"),
-		Expires:     mustParseExpirationTime("2024-12-15T21:52:33Z"),
-		Note:        picoshare.FileNote{},
+	type fakeEntry struct {
+		ID                 string
+		Filename           picoshare.Filename
+		Expires            picoshare.ExpirationTime
+		DownloadPassphrase string
 	}
 	for _, tt := range []struct {
-		description      string
-		targetID         string
-		payload          string
-		filenameExpected string
-		expiresExpected  picoshare.ExpirationTime
-		noteExpected     picoshare.FileNote
-		status           int
+		description                string
+		entryInStore               fakeEntry
+		path                       string
+		payload                    string
+		filenameExpected           string
+		expiresExpected            picoshare.ExpirationTime
+		noteExpected               picoshare.FileNote
+		downloadPassphraseExpected string
+		status                     int
 	}{
 		{
 			description: "updates metadata for valid request",
-			targetID:    "AAAAAAAAAA",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/AAAAAAAAAA",
 			payload: `{
 				"filename": "cool-song.mp3",
 				"expiration": "2029-01-02T01:02:03Z",
 				"note":"My latest track"
 			}`,
 			filenameExpected: "cool-song.mp3",
-			noteExpected:     makeNote("My latest track"),
-			expiresExpected:  mustParseExpirationTime("2029-01-02T01:02:03Z"),
+			noteExpected:     picoshare.FileNote{Value: new("My latest track")},
+			expiresExpected:  testutil.MustParseExpirationTime(t, "2029-01-02T01:02:03Z"),
 			status:           http.StatusOK,
 		},
 		{
 			description: "treats missing expiration time as NeverExpire",
-			targetID:    "AAAAAAAAAA",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/AAAAAAAAAA",
 			payload: `{
 				"filename": "cool-song.mp3",
 				"note":"My latest track"
 			}`,
 			filenameExpected: "cool-song.mp3",
-			noteExpected:     makeNote("My latest track"),
+			noteExpected:     picoshare.FileNote{Value: new("My latest track")},
 			expiresExpected:  picoshare.NeverExpire,
 			status:           http.StatusOK,
 		},
 		{
 			description: "rejects update when filename is invalid",
-			targetID:    "AAAAAAAAAA",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/AAAAAAAAAA",
 			payload: `{
 				"filename": "",
 				"expiration": "2029-01-02T01:02:03Z",
@@ -215,47 +255,190 @@ func TestEntryPut(t *testing.T) {
 			}`,
 			filenameExpected: "original-filename.mp3",
 			noteExpected:     picoshare.FileNote{},
-			expiresExpected:  mustParseExpirationTime("2024-12-15T21:52:33Z"),
+			expiresExpected:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
 			status:           http.StatusBadRequest,
 		},
 		{
 			description: "rejects update when note is invalid",
-			targetID:    "AAAAAAAAAA",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/AAAAAAAAAA",
 			payload: `{
 				"filename": "cool-song.mp3",
 				"expiration": "2029-01-02T01:02:03Z",
 				"note":"<script>alert(1)</script>"
 			}`,
 			filenameExpected: "original-filename.mp3",
-			expiresExpected:  mustParseExpirationTime("2024-12-15T21:52:33Z"),
+			expiresExpected:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
 			noteExpected:     picoshare.FileNote{},
 			status:           http.StatusBadRequest,
 		},
 		{
 			description: "ignores non-existent entry ID",
-			targetID:    "BBBBBBBBBB",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/BBBBBBBBBB",
 			payload: `{
 				"filename": "cool-song.mp3",
 				"expiration": "2029-01-02T01:02:03Z",
 				"note":"My latest track"
 			}`,
 			filenameExpected: "original-filename.mp3",
-			expiresExpected:  mustParseExpirationTime("2024-12-15T21:52:33Z"),
+			expiresExpected:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
 			noteExpected:     picoshare.FileNote{},
 			status:           http.StatusNotFound,
 		},
+		{
+			description: "sets a download passphrase",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/AAAAAAAAAA",
+			payload: `{
+				"filename": "cool-song.mp3",
+				"expiration": "2029-01-02T01:02:03Z",
+				"note":"My latest track",
+				"downloadPassphrase": "correct horse battery staple"
+			}`,
+			filenameExpected:           "cool-song.mp3",
+			noteExpected:               picoshare.FileNote{Value: new("My latest track")},
+			expiresExpected:            testutil.MustParseExpirationTime(t, "2029-01-02T01:02:03Z"),
+			downloadPassphraseExpected: "correct horse battery staple",
+			status:                     http.StatusOK,
+		},
+		{
+			description: "replaces an existing download passphrase",
+			entryInStore: fakeEntry{
+				ID:                 "AAAAAAAAAA",
+				Filename:           "original-filename.mp3",
+				Expires:            testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+				DownloadPassphrase: "correct horse battery staple",
+			},
+			path: "/api/entry/AAAAAAAAAA",
+			payload: `{
+				"filename": "cool-song.mp3",
+				"expiration": "2029-01-02T01:02:03Z",
+				"note":"My latest track",
+				"downloadPassphrase": "new passphrase"
+			}`,
+			filenameExpected:           "cool-song.mp3",
+			noteExpected:               picoshare.FileNote{Value: new("My latest track")},
+			expiresExpected:            testutil.MustParseExpirationTime(t, "2029-01-02T01:02:03Z"),
+			downloadPassphraseExpected: "new passphrase",
+			status:                     http.StatusOK,
+		},
+		{
+			description: "removes the download passphrase",
+			entryInStore: fakeEntry{
+				ID:                 "AAAAAAAAAA",
+				Filename:           "original-filename.mp3",
+				Expires:            testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+				DownloadPassphrase: "correct horse battery staple",
+			},
+			path: "/api/entry/AAAAAAAAAA",
+			payload: `{
+				"filename": "cool-song.mp3",
+				"expiration": "2029-01-02T01:02:03Z",
+				"note":"My latest track",
+				"downloadPassphrase": ""
+			}`,
+			filenameExpected:           "cool-song.mp3",
+			noteExpected:               picoshare.FileNote{Value: new("My latest track")},
+			expiresExpected:            testutil.MustParseExpirationTime(t, "2029-01-02T01:02:03Z"),
+			downloadPassphraseExpected: "",
+			status:                     http.StatusOK,
+		},
+		{
+			description: "keeps an unprotected entry unprotected when the passphrase is empty",
+			entryInStore: fakeEntry{
+				ID:       "AAAAAAAAAA",
+				Filename: "original-filename.mp3",
+				Expires:  testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			},
+			path: "/api/entry/AAAAAAAAAA",
+			payload: `{
+				"filename": "cool-song.mp3",
+				"expiration": "2029-01-02T01:02:03Z",
+				"note":"My latest track",
+				"downloadPassphrase": ""
+			}`,
+			filenameExpected:           "cool-song.mp3",
+			noteExpected:               picoshare.FileNote{Value: new("My latest track")},
+			expiresExpected:            testutil.MustParseExpirationTime(t, "2029-01-02T01:02:03Z"),
+			downloadPassphraseExpected: "",
+			status:                     http.StatusOK,
+		},
+		{
+			description: "removes the download passphrase when the request omits it",
+			entryInStore: fakeEntry{
+				ID:                 "AAAAAAAAAA",
+				Filename:           "original-filename.mp3",
+				Expires:            testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+				DownloadPassphrase: "correct horse battery staple",
+			},
+			path: "/api/entry/AAAAAAAAAA",
+			payload: `{
+				"filename": "cool-song.mp3",
+				"expiration": "2029-01-02T01:02:03Z",
+				"note":"My latest track"
+			}`,
+			filenameExpected:           "cool-song.mp3",
+			noteExpected:               picoshare.FileNote{Value: new("My latest track")},
+			expiresExpected:            testutil.MustParseExpirationTime(t, "2029-01-02T01:02:03Z"),
+			downloadPassphraseExpected: "",
+			status:                     http.StatusOK,
+		},
+		{
+			description: "rejects update when download passphrase is too long",
+			entryInStore: fakeEntry{
+				ID:                 "AAAAAAAAAA",
+				Filename:           "original-filename.mp3",
+				Expires:            testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+				DownloadPassphrase: "correct horse battery staple",
+			},
+			path: "/api/entry/AAAAAAAAAA",
+			payload: `{
+				"filename": "cool-song.mp3",
+				"expiration": "2029-01-02T01:02:03Z",
+				"note":"My latest track",
+				"downloadPassphrase": "` + strings.Repeat("a", picoshare.MaxPassphraseLength+1) + `"
+			}`,
+			filenameExpected:           "original-filename.mp3",
+			noteExpected:               picoshare.FileNote{},
+			expiresExpected:            testutil.MustParseExpirationTime(t, "2024-12-15T21:52:33Z"),
+			downloadPassphraseExpected: "correct horse battery staple",
+			status:                     http.StatusBadRequest,
+		},
 	} {
 		t.Run(tt.description, func(t *testing.T) {
-			dataStore := test_sqlite.New()
+			dataStore := test_sqlite.New(t)
 			originalData := "dummy original data"
-			metadata := originalEntry
+			metadata := picoshare.UploadMetadata{
+				ID:          picoshare.MustCreateEntryID(tt.entryInStore.ID),
+				Filename:    tt.entryInStore.Filename,
+				ContentType: picoshare.ContentType("audio/mpeg"),
+				Uploaded:    mustParseTime("2023-01-01T00:00:00Z"),
+				Expires:     tt.entryInStore.Expires,
+				Note:        picoshare.FileNote{},
+			}
 			metadata.Size = mustParseFileSize(len(originalData))
+			if tt.entryInStore.DownloadPassphrase != "" {
+				metadata.DownloadPassphrase = mustCreateDownloadPassphrase(t, tt.entryInStore.DownloadPassphrase)
+			}
 			dataStore.InsertEntry(strings.NewReader((originalData)), metadata)
-			s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceChecker, nilGarbageCollector, handlers.NewClock())
+			s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, time.Now)
 
 			req := httptest.NewRequest(
 				http.MethodPut,
-				"/api/entry/"+tt.targetID,
+				tt.path,
 				strings.NewReader(tt.payload),
 			)
 			req.Header.Add("Content-Type", "text/json")
@@ -268,9 +451,9 @@ func TestEntryPut(t *testing.T) {
 				t.Fatalf("status=%d, want=%d", got, want)
 			}
 
-			entry, err := dataStore.GetEntryMetadata(picoshare.EntryID(originalEntry.ID))
+			entry, err := dataStore.GetEntryMetadata(picoshare.MustCreateEntryID(tt.entryInStore.ID))
 			if err != nil {
-				t.Fatalf("failed to get expected entry %v from data store: %v", originalEntry.ID, err)
+				t.Fatalf("failed to get expected entry %v from data store: %v", tt.entryInStore.ID, err)
 			}
 
 			if got, want := entry.Filename, picoshare.Filename(tt.filenameExpected); got != want {
@@ -280,15 +463,20 @@ func TestEntryPut(t *testing.T) {
 			if got, want := entry.Note.String(), tt.noteExpected.String(); got != want {
 				t.Errorf("note=%v, want=%v", got, want)
 			}
+
+			if got, want := downloadPassphraseToString(entry.DownloadPassphrase), tt.downloadPassphraseExpected; got != want {
+				t.Errorf("download passphrase=%q, want=%q", got, want)
+			}
 		})
 	}
 }
 
 func TestGuestUpload(t *testing.T) {
-	authenticator, err := shared_secret.New("dummypass")
+	passphrase, err := picoshare.NewPassphrase("dummypass")
 	if err != nil {
-		t.Fatalf("failed to create shared secret: %v", err)
+		t.Fatalf("failed to create passphrase: %v", err)
 	}
+	authenticator := shared_secret.New(passphrase)
 
 	for _, tt := range []struct {
 		description                string
@@ -297,6 +485,7 @@ func TestGuestUpload(t *testing.T) {
 		currentTime                time.Time
 		url                        string
 		note                       string
+		downloadPassphrase         string
 		status                     int
 		fileExpirationTimeExpected picoshare.ExpirationTime
 	}{
@@ -305,23 +494,23 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2030-01-01T00:00:00Z",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2030-01-01T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2030-01-01T00:00:00Z"),
 		},
 		{
 			description: "expired guest link",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2024-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2024-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
-			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
+			currentTime:                mustParseTime("2024-01-03T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2030-01-01T00:00:00Z",
 			status:                     http.StatusUnauthorized,
 			fileExpirationTimeExpected: picoshare.NeverExpire,
@@ -345,7 +534,7 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -358,7 +547,7 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -371,7 +560,7 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2024-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2024-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -384,7 +573,7 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -394,18 +583,32 @@ func TestGuestUpload(t *testing.T) {
 			fileExpirationTimeExpected: picoshare.NeverExpire,
 		},
 		{
+			description: "reject upload that includes a download passphrase",
+			guestLinkInStore: picoshare.GuestLink{
+				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
+				Created:         mustParseTime("2022-05-26T00:00:00Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
+				MaxFileLifetime: picoshare.FileLifetimeInfinite,
+			},
+			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
+			url:                        "/api/guest/abcdefgh23456789?expiration=2030-01-01T00:00:00Z",
+			downloadPassphrase:         "correct horse battery staple",
+			status:                     http.StatusBadRequest,
+			fileExpirationTimeExpected: picoshare.NeverExpire,
+		},
+		{
 			description: "exhausted upload count",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
-				MaxFileUploads:  makeGuestUploadCountLimit(2),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
+				MaxFileUploads:  new(2),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			entriesInStore: []picoshare.UploadEntry{
 				{
 					UploadMetadata: picoshare.UploadMetadata{
-						ID:       picoshare.EntryID("dummy-entry1"),
+						ID:       picoshare.MustCreateEntryID("AAAAAAAAAA"),
 						Uploaded: mustParseTime("2024-02-01T00:00:00Z"),
 						GuestLink: picoshare.GuestLink{
 							ID: picoshare.GuestLinkID("abcdefgh23456789"),
@@ -415,7 +618,7 @@ func TestGuestUpload(t *testing.T) {
 				},
 				{
 					UploadMetadata: picoshare.UploadMetadata{
-						ID:       picoshare.EntryID("dummy-entry2"),
+						ID:       picoshare.MustCreateEntryID("BBBBBBBBBB"),
 						Uploaded: mustParseTime("2024-02-02T00:00:00Z"),
 						GuestLink: picoshare.GuestLink{
 							ID: picoshare.GuestLinkID("abcdefgh23456789"),
@@ -434,8 +637,8 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2024-01-01T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
-				MaxFileBytes:    makeGuestUploadMaxFileBytes(1),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
+				MaxFileBytes:    new(uint64(1)),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -448,98 +651,98 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.NewFileLifetimeInDays(1),
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2024-01-02T00:00:00Z",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2024-01-02T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2024-01-02T00:00:00Z"),
 		},
 		{
 			description: "guest file expires in 365 days",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.NewFileLifetimeInDays(365),
 			},
 			currentTime:                mustParseTime("2023-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2024-01-01T00:00:00Z",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2024-01-01T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2024-01-01T00:00:00Z"),
 		},
 		{
 			description: "guest upload with valid expiration within guest link limits",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.NewFileLifetimeInDays(30),
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2024-01-15T00:00:00Z",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2024-01-15T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2024-01-15T00:00:00Z"),
 		},
 		{
 			description: "guest upload with infinite guest link accepts any expiration",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2025-01-01T00:00:00Z",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2025-01-01T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2025-01-01T00:00:00Z"),
 		},
 		{
 			description: "reject guest upload with expiration that exceeds guest link limit",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.NewFileLifetimeInDays(7),
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=2024-01-31T00:00:00Z",
 			status:                     http.StatusBadRequest,
-			fileExpirationTimeExpected: mustParseExpirationTime("2024-01-08T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2024-01-08T00:00:00Z"),
 		},
 		{
 			description: "guest upload without expiration defaults to max allowed (30 days)",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.NewFileLifetimeInDays(30),
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2024-01-31T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2024-01-31T00:00:00Z"),
 		},
 		{
 			description: "guest upload with empty expiration defaults to max allowed (30 days)",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.NewFileLifetimeInDays(30),
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
 			url:                        "/api/guest/abcdefgh23456789?expiration=",
 			status:                     http.StatusOK,
-			fileExpirationTimeExpected: mustParseExpirationTime("2024-01-31T00:00:00Z"),
+			fileExpirationTimeExpected: testutil.MustParseExpirationTime(t, "2024-01-31T00:00:00Z"),
 		},
 		{
 			description: "guest upload without expiration defaults to never expire (infinite)",
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -552,7 +755,7 @@ func TestGuestUpload(t *testing.T) {
 			guestLinkInStore: picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			},
 			currentTime:                mustParseTime("2024-01-01T00:00:00Z"),
@@ -562,7 +765,7 @@ func TestGuestUpload(t *testing.T) {
 		},
 	} {
 		t.Run(tt.description, func(t *testing.T) {
-			dataStore := test_sqlite.New()
+			dataStore := test_sqlite.New(t)
 			if err := dataStore.InsertGuestLink(tt.guestLinkInStore); err != nil {
 				t.Fatalf("failed to insert dummy guest link: %v", err)
 			}
@@ -574,12 +777,12 @@ func TestGuestUpload(t *testing.T) {
 				}
 			}
 
-			c := mockClock{tt.currentTime}
-			s := handlers.New(authenticator, &dataStore, nilSpaceChecker, nilGarbageCollector, c)
+			now := tt.currentTime
+			s := handlers.New(authenticator, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, func() time.Time { return now })
 
 			filename := "dummyimage.png"
 			contents := "dummy bytes"
-			formData, contentType := createMultipartFormBody(filename, tt.note, strings.NewReader(contents))
+			formData, contentType := createMultipartFormBody(filename, tt.note, tt.downloadPassphrase, strings.NewReader(contents))
 
 			req := httptest.NewRequest(http.MethodPost, tt.url, formData)
 			req.Header.Add("Content-Type", contentType)
@@ -626,7 +829,7 @@ func TestGuestUpload(t *testing.T) {
 				t.Fatalf("response is not valid JSON: %v", body)
 			}
 
-			entry, err := dataStore.GetEntryMetadata(picoshare.EntryID(response.ID))
+			entry, err := dataStore.GetEntryMetadata(picoshare.MustCreateEntryID(response.ID))
 			if err != nil {
 				t.Fatalf("failed to get expected entry %v from data store: %v", response.ID, err)
 			}
@@ -651,10 +854,11 @@ func TestGuestUpload(t *testing.T) {
 }
 
 func TestGuestUploadAcceptHeader(t *testing.T) {
-	authenticator, err := shared_secret.New("dummypass")
+	passphrase, err := picoshare.NewPassphrase("dummypass")
 	if err != nil {
-		t.Fatalf("failed to create shared secret: %v", err)
+		t.Fatalf("failed to create passphrase: %v", err)
 	}
+	authenticator := shared_secret.New(passphrase)
 
 	for _, tt := range []struct {
 		explanation         string
@@ -663,48 +867,48 @@ func TestGuestUploadAcceptHeader(t *testing.T) {
 		expectedContentType string
 	}{
 		{
-			"no Accept header returns plain text URL",
-			"",
-			false,
-			"text/plain",
+			explanation:         "no Accept header returns plain text URL",
+			acceptHeader:        "",
+			expectJSON:          false,
+			expectedContentType: "text/plain",
 		},
 		{
-			"Accept header with wildcard returns plain text URL",
-			"*/*",
-			false,
-			"text/plain",
+			explanation:         "Accept header with wildcard returns plain text URL",
+			acceptHeader:        "*/*",
+			expectJSON:          false,
+			expectedContentType: "text/plain",
 		},
 		{
-			"Accept header with application/json returns JSON",
-			"application/json",
-			true,
-			"application/json",
+			explanation:         "Accept header with application/json returns JSON",
+			acceptHeader:        "application/json",
+			expectJSON:          true,
+			expectedContentType: "application/json",
 		},
 		{
-			"Accept header with text/html returns plain text URL",
-			"text/html",
-			false,
-			"text/plain",
+			explanation:         "Accept header with text/html returns plain text URL",
+			acceptHeader:        "text/html",
+			expectJSON:          false,
+			expectedContentType: "text/plain",
 		},
 	} {
 		t.Run(fmt.Sprintf("%s [%s]", tt.explanation, tt.acceptHeader), func(t *testing.T) {
-			dataStore := test_sqlite.New()
+			dataStore := test_sqlite.New(t)
 			guestLink := picoshare.GuestLink{
 				ID:              picoshare.GuestLinkID("abcdefgh23456789"),
 				Created:         mustParseTime("2022-05-26T00:00:00Z"),
-				UrlExpires:      mustParseExpirationTime("2030-01-02T03:04:25Z"),
+				UrlExpires:      testutil.MustParseExpirationTime(t, "2030-01-02T03:04:25Z"),
 				MaxFileLifetime: picoshare.FileLifetimeInfinite,
 			}
 			if err := dataStore.InsertGuestLink(guestLink); err != nil {
 				t.Fatalf("failed to insert dummy guest link: %v", err)
 			}
 
-			c := mockClock{mustParseTime("2024-01-01T00:00:00Z")}
-			s := handlers.New(authenticator, &dataStore, nilSpaceChecker, nilGarbageCollector, c)
+			now := mustParseTime("2024-01-01T00:00:00Z")
+			s := handlers.New(authenticator, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, func() time.Time { return now })
 
 			filename := "dummyimage.png"
 			contents := "dummy bytes"
-			formData, contentType := createMultipartFormBody(filename, "", strings.NewReader(contents))
+			formData, contentType := createMultipartFormBody(filename, "", "", strings.NewReader(contents))
 
 			req := httptest.NewRequest(
 				http.MethodPost,
@@ -756,7 +960,91 @@ func TestGuestUploadAcceptHeader(t *testing.T) {
 	}
 }
 
-func createMultipartFormBody(filename, note string, r io.Reader) (io.Reader, string) {
+func TestGuestUploadBrokenPipe(t *testing.T) {
+	dataStore := test_sqlite.New(t)
+	now := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
+	guestLink := picoshare.GuestLink{
+		ID:              picoshare.GuestLinkID("abcdefgh23456789"),
+		Created:         now,
+		UrlExpires:      picoshare.NeverExpire,
+		MaxFileLifetime: picoshare.FileLifetimeInfinite,
+	}
+	if err := dataStore.InsertGuestLink(guestLink); err != nil {
+		t.Fatalf("failed to insert guest link: %v", err)
+	}
+	s := handlers.New(mockAuthenticator{}, &dataStore, nilSpaceCheckFunc, nilGarbageCollector, func() time.Time { return now })
+
+	{
+		filename := "disconnected-upload.txt"
+		contents := "persisted despite the disconnected client"
+		formData, contentType := createMultipartFormBody(filename, "", "", strings.NewReader(contents))
+		req := httptest.NewRequest(http.MethodPost, "/api/guest/abcdefgh23456789", formData)
+		req.Header.Set("Content-Type", contentType)
+		// A long Host enlarges the plaintext URL response in the reported failure.
+		req.Host = strings.Repeat("a", 16<<10) + ".example.com"
+		rec := httptest.NewRecorder()
+		w := brokenPipeResponseWriter{ResponseRecorder: rec}
+
+		s.Router().ServeHTTP(w, req)
+
+		// A response write commits HTTP 200 even when the connection write fails.
+		if got, want := rec.Result().StatusCode, http.StatusOK; got != want {
+			t.Fatalf("status=%d, want=%d", got, want)
+		}
+		entries, err := dataStore.GetEntriesMetadata()
+		if err != nil {
+			t.Fatalf("failed to retrieve uploaded entries: %v", err)
+		}
+		if got, want := len(entries), 1; got != want {
+			t.Fatalf("stored entry count=%d, want=%d", got, want)
+		}
+		if got, want := entries[0].Filename, picoshare.Filename(filename); got != want {
+			t.Errorf("filename=%v, want=%v", got, want)
+		}
+		file, err := dataStore.ReadEntryFile(entries[0].ID)
+		if err != nil {
+			t.Fatalf("failed to read uploaded file: %v", err)
+		}
+		if got, want := string(mustReadAll(file)), contents; got != want {
+			t.Errorf("stored contents=%q, want=%q", got, want)
+		}
+	}
+
+	{
+		filename := "subsequent-upload.txt"
+		contents := "the server still accepts uploads"
+		formData, contentType := createMultipartFormBody(filename, "", "", strings.NewReader(contents))
+		req := httptest.NewRequest(http.MethodPost, "/api/guest/abcdefgh23456789", formData)
+		req.Header.Set("Content-Type", contentType)
+		rec := httptest.NewRecorder()
+
+		s.Router().ServeHTTP(rec, req)
+
+		if got, want := rec.Result().StatusCode, http.StatusOK; got != want {
+			t.Fatalf("status=%d, want=%d", got, want)
+		}
+		id, err := picoshare.EntryIDFromString(strings.TrimPrefix(strings.TrimSpace(rec.Body.String()), "http://example.com/-"))
+		if err != nil {
+			t.Fatalf("failed to parse entry ID from plaintext response %q: %v", rec.Body.String(), err)
+		}
+		entry, err := dataStore.GetEntryMetadata(id)
+		if err != nil {
+			t.Fatalf("failed to retrieve subsequent upload: %v", err)
+		}
+		if got, want := entry.Filename, picoshare.Filename(filename); got != want {
+			t.Errorf("filename=%v, want=%v", got, want)
+		}
+		file, err := dataStore.ReadEntryFile(id)
+		if err != nil {
+			t.Fatalf("failed to read subsequent upload: %v", err)
+		}
+		if got, want := string(mustReadAll(file)), contents; got != want {
+			t.Errorf("stored contents=%q, want=%q", got, want)
+		}
+	}
+}
+
+func createMultipartFormBody(filename, note, downloadPassphrase string, r io.Reader) (io.Reader, string) {
 	var b bytes.Buffer
 	bw := bufio.NewWriter(&b)
 	mw := multipart.NewWriter(bw)
@@ -773,6 +1061,12 @@ func createMultipartFormBody(filename, note string, r io.Reader) (io.Reader, str
 	}
 	nf.Write([]byte(note))
 
+	pf, err := mw.CreateFormField("downloadPassphrase")
+	if err != nil {
+		panic(err)
+	}
+	pf.Write([]byte(downloadPassphrase))
+
 	mw.Close()
 	bw.Flush()
 
@@ -787,8 +1081,11 @@ func mustParseTime(s string) time.Time {
 	return t
 }
 
-func mustParseExpirationTime(s string) picoshare.ExpirationTime {
-	return picoshare.ExpirationTime(mustParseTime(s))
+func downloadPassphraseToString(p picoshare.DownloadPassphrase) string {
+	if p.Empty() {
+		return ""
+	}
+	return p.String()
 }
 
 func mustReadAll(r io.Reader) []byte {
@@ -797,10 +1094,6 @@ func mustReadAll(r io.Reader) []byte {
 		panic(err)
 	}
 	return d
-}
-
-func makeNote(s string) picoshare.FileNote {
-	return picoshare.FileNote{Value: &s}
 }
 
 func mustParseFileSize(val int) picoshare.FileSize {

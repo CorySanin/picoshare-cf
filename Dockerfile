@@ -1,4 +1,4 @@
-FROM golang:1.26.0 AS builder
+FROM golang:1.26.1 AS builder
 
 ARG TARGETPLATFORM
 
@@ -49,7 +49,7 @@ RUN set -x && \
     mv "${litestream_binary_tgz_filename}" litestream.tgz
 RUN tar -xvzf litestream.tgz
 
-FROM alpine:3.15
+FROM alpine:3.24.4
 
 RUN apk add --no-cache bash
 
@@ -60,6 +60,7 @@ COPY ./litestream.yml /etc/litestream.yml
 COPY ./LICENSE /app/LICENSE
 
 ENV LITESTREAM_RETENTION=72h
+ENV LITESTREAM_PATH=db
 
 WORKDIR /app
 

@@ -9,7 +9,7 @@ import (
 
 func (s Store) InsertEntryDownload(id picoshare.EntryID, r picoshare.DownloadRecord) error {
 	log.Printf("recording download of file ID %s from client %s", id.String(), r.ClientIP)
-	if _, err := s.ctx.Exec(`
+	if _, err := s.db.Exec(`
 	INSERT INTO
 		downloads
 	(
@@ -31,7 +31,7 @@ func (s Store) InsertEntryDownload(id picoshare.EntryID, r picoshare.DownloadRec
 }
 
 func (s Store) GetEntryDownloads(id picoshare.EntryID) ([]picoshare.DownloadRecord, error) {
-	rows, err := s.ctx.Query(`
+	rows, err := s.db.Query(`
 	SELECT
 		download_timestamp,
 		client_ip,
@@ -41,7 +41,7 @@ func (s Store) GetEntryDownloads(id picoshare.EntryID) ([]picoshare.DownloadReco
 	WHERE
 		entry_id=:entry_id
 	ORDER BY
-		download_timestamp DESC`, sql.Named("entry_id", id))
+		download_timestamp DESC`, sql.Named("entry_id", id.String()))
 	if err == sql.ErrNoRows {
 		return []picoshare.DownloadRecord{}, nil
 	} else if err != nil {

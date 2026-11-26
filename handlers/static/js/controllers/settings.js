@@ -18,7 +18,7 @@ export async function settingsPut(settings) {
       if (error.message) {
         return Promise.reject(
           "Failed to communicate with server" +
-            (error.message ? `: ${error.message}` : ".")
+            (error.message ? `: ${error.message}` : "."),
         );
       }
       return Promise.reject(error);

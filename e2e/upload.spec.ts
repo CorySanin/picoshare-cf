@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { login } from "./helpers/login";
 
 const noteColumn = 1;
@@ -18,17 +18,17 @@ test("uploads a file without specifying any parameters", async ({
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
   await expect(page.locator("#upload-result upload-links")).toHaveAttribute(
     "filename",
-    "simple-upload.txt"
+    "simple-upload.txt",
   );
   await expect(
-    page.locator("#upload-result upload-links #verbose-link-box #link")
+    page.locator("#upload-result upload-links #verbose-link-box #link"),
   ).toBeVisible();
   await expect(
-    page.locator("#upload-result upload-links #short-link-box #link")
+    page.locator("#upload-result upload-links #short-link-box #link"),
   ).toBeVisible();
 
   // Verify that cleanup doesn't incorrectly remove the file.
@@ -59,7 +59,7 @@ test("uploads a file with a custom expiration time", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -70,7 +70,7 @@ test("uploads a file with a custom expiration time", async ({ page }) => {
   await expect(matchingRow).toBeVisible();
   await expect(matchingRow.getByRole("cell").nth(noteColumn)).toBeEmpty();
   await expect(matchingRow.getByRole("cell").nth(expirationColumn)).toHaveText(
-    /^2029-09-03/
+    /^2029-09-03/,
   );
 });
 
@@ -87,7 +87,7 @@ test("uploads a file with a note", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -97,7 +97,7 @@ test("uploads a file with a note", async ({ page }) => {
     .filter({ hasText: "upload-with-note.txt" });
   await expect(matchingRow).toBeVisible();
   await expect(matchingRow.getByRole("cell").nth(noteColumn)).toHaveText(
-    "For Pico, with Love and Squalor"
+    "For Pico, with Love and Squalor",
   );
 });
 
@@ -112,7 +112,7 @@ test("uploads a file and deletes it", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -125,7 +125,7 @@ test("uploads a file and deletes it", async ({ page }) => {
     .getByRole("link", { name: "upload-for-deletion.txt" })
     .click();
   await expect(page.locator("pre")).toHaveText(
-    "I'm an upload that will soon be deleted"
+    "I'm an upload that will soon be deleted",
   );
 
   // Delete the file.
@@ -145,7 +145,7 @@ test("uploads a file and deletes it", async ({ page }) => {
 
   await expect(page).toHaveURL("/files");
   await expect(
-    await page.getByRole("row").filter({ hasText: "upload-for-deletion.txt" })
+    await page.getByRole("row").filter({ hasText: "upload-for-deletion.txt" }),
   ).toHaveCount(0);
 });
 
@@ -174,7 +174,7 @@ test("uploads a file and then uploads another", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("button", { name: "Upload Another" }).click();
@@ -187,7 +187,7 @@ test("uploads a file and then uploads another", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -198,14 +198,14 @@ test("uploads a file and then uploads another", async ({ page }) => {
       .getByRole("row")
       .filter({ hasText: "upload-1.txt" })
       .getByRole("cell")
-      .nth(expirationColumn)
+      .nth(expirationColumn),
   ).toHaveText(/ \(30 days\)$/);
   await expect(
     page
       .getByRole("row")
       .filter({ hasText: "upload-2.txt" })
       .getByRole("cell")
-      .nth(expirationColumn)
+      .nth(expirationColumn),
   ).toHaveText(/ \(30 days\)$/);
 });
 
@@ -222,7 +222,7 @@ test("uploads a file and deletes its note", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -231,7 +231,7 @@ test("uploads a file and deletes its note", async ({ page }) => {
     .getByRole("row")
     .filter({ hasText: "upload-with-temporary-note.txt" });
   await expect(matchingRow.getByRole("cell").nth(noteColumn)).toHaveText(
-    "For Pico, with Love and Squalor"
+    "For Pico, with Love and Squalor",
   );
   await matchingRow.getByRole("button", { name: "Edit" }).click();
 
@@ -245,7 +245,7 @@ test("uploads a file and deletes its note", async ({ page }) => {
       .getByRole("row")
       .filter({ hasText: "upload-with-temporary-note.txt" })
       .getByRole("cell")
-      .nth(noteColumn)
+      .nth(noteColumn),
   ).toBeEmpty();
 });
 
@@ -262,7 +262,7 @@ test("uploads a file and edits its note", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -278,11 +278,11 @@ test("uploads a file and edits its note", async ({ page }) => {
 
   await expect(page).toHaveURL("/files");
   await expect(
-    await page
+    page
       .getByRole("row")
       .filter({ hasText: "upload-with-note-i-will-edit.txt" })
       .getByRole("cell")
-      .nth(noteColumn)
+      .nth(noteColumn),
   ).toHaveText("I have a different note now");
 });
 
@@ -297,7 +297,7 @@ test("uploads a file and changes its expiration time", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -321,7 +321,7 @@ test("uploads a file and changes its expiration time", async ({ page }) => {
       .getByRole("row")
       .filter({ hasText: "file-with-new-expiration.txt" })
       .getByRole("cell")
-      .nth(expirationColumn)
+      .nth(expirationColumn),
   ).toHaveText(/^2029-09-04/);
 });
 
@@ -336,7 +336,7 @@ test("edits a file and cancels the edit", async ({ page }) => {
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();
@@ -368,7 +368,7 @@ test("views file info, starts an edit, and cancels the edit", async ({
     },
   ]);
   await expect(page.locator("#upload-result .message-body")).toHaveText(
-    "Upload complete!"
+    "Upload complete!",
   );
 
   await page.getByRole("menuitem", { name: "Files" }).click();

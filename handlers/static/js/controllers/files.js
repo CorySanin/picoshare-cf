@@ -4,6 +4,7 @@ async function uploadFormData(url, formData, progressFn) {
   const CHUNK_SIZE = 32768 * 10; // sqlite.go:defaultChunkSize
   const file = formData.get("file");
   const note = formData.get('note')
+  const passphrase = formData.get('downloadPassphrase');
   const totalSize = file.size;
   const splits = Math.ceil(file.size / CHUNK_SIZE);
   let uploaded = 0;
@@ -19,6 +20,9 @@ async function uploadFormData(url, formData, progressFn) {
     chunkData.append("last", i === splits - 1 ? "1" : "0");
     if (note) {
       chunkData.append("note", note);
+    }
+    if (passphrase) {
+      chunkData.append("downloadPassphrase", passphrase);
     }
     if (id) {
       chunkData.append("id", id);
@@ -80,7 +84,7 @@ function uploadFormDataXHR(url, formData, progressFn) {
     xhr.addEventListener("error", () => {
       reject(
         "Failed to communicate with server" +
-          (xhr.statusText ? `: ${xhr.statusText}` : ".")
+        (xhr.statusText ? `: ${xhr.statusText}` : "."),
       );
     });
     xhr.send(formData);
@@ -96,16 +100,25 @@ function uploadFormDataXHR(url, formData, progressFn) {
     });
 }
 
-export async function uploadFile(file, expirationTime, note, progressFn) {
+export async function uploadFile(
+  file,
+  expirationTime,
+  note,
+  downloadPassphrase,
+  progressFn,
+) {
   const formData = new FormData();
   formData.append("file", file);
   if (note) {
     formData.append("note", note);
   }
+  if (downloadPassphrase) {
+    formData.append("downloadPassphrase", downloadPassphrase);
+  }
   return uploadFormData(
     `/api/entry-chunk?expiration=${encodeURIComponent(expirationTime)}`,
     formData,
-    progressFn
+    progressFn,
   );
 }
 
@@ -113,23 +126,30 @@ export async function guestUploadFile(
   file,
   guestLinkID,
   expirationTime,
-  progressFn
+  progressFn,
 ) {
   const formData = new FormData();
   formData.append("file", file);
   return uploadFormData(
     `/api/guest-chunk/${guestLinkID}?expiration=${encodeURIComponent(
-      expirationTime
+      expirationTime,
     )}`,
     formData,
-    progressFn
+    progressFn,
   );
 }
 
-export async function editFile(id, filename, expiration, note) {
+export async function editFile(
+  id,
+  filename,
+  expiration,
+  note,
+  downloadPassphrase,
+) {
   let payload = {
     filename,
     note,
+    downloadPassphrase,
   };
   if (expiration) {
     payload.expiration = expiration;
@@ -151,7 +171,7 @@ export async function editFile(id, filename, expiration, note) {
       if (error.message) {
         return Promise.reject(
           "Failed to communicate with server" +
-            (error.message ? `: ${error.message}` : ".")
+          (error.message ? `: ${error.message}` : "."),
         );
       }
       return Promise.reject(error);
@@ -175,7 +195,7 @@ export async function deleteFile(id) {
       if (error.message) {
         return Promise.reject(
           "Failed to communicate with server" +
-            (error.message ? `: ${error.message}` : ".")
+          (error.message ? `: ${error.message}` : "."),
         );
       }
       return Promise.reject(error);

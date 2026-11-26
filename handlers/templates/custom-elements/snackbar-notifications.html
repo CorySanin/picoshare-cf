@@ -15,7 +15,9 @@
       text-align: center;
       border-radius: 2px;
       padding: 1rem;
-      animation: fadein 0.5s, fadeout 0.5s 2.5s;
+      animation:
+        fadein 0.5s,
+        fadeout 0.5s 2.5s;
     }
 
     @keyframes fadein {
@@ -52,7 +54,7 @@
       class extends HTMLElement {
         connectedCallback() {
           this.attachShadow({ mode: "open" }).appendChild(
-            template.content.cloneNode(true)
+            template.content.cloneNode(true),
           );
         }
 
@@ -69,7 +71,7 @@
             notificationEl.remove();
           }, 3000);
         }
-      }
+      },
     );
   })();
 </script>

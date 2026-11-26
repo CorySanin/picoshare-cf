@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 
 	"github.com/mtlynch/picoshare/picoshare"
@@ -10,7 +11,7 @@ import (
 )
 
 func (s Store) GetGuestLink(id picoshare.GuestLinkID) (picoshare.GuestLink, error) {
-	row := s.ctx.QueryRow(`
+	row := s.db.QueryRow(`
 		SELECT
 			guest_links.id AS id,
 			guest_links.label AS label,
@@ -34,7 +35,7 @@ func (s Store) GetGuestLink(id picoshare.GuestLinkID) (picoshare.GuestLink, erro
 }
 
 func (s Store) GetGuestLinks() ([]picoshare.GuestLink, error) {
-	rows, err := s.ctx.Query(`
+	rows, err := s.db.Query(`
 		SELECT
 			guest_links.id AS id,
 			guest_links.label AS label,
@@ -71,7 +72,7 @@ func (s Store) GetGuestLinks() ([]picoshare.GuestLink, error) {
 func (s *Store) InsertGuestLink(guestLink picoshare.GuestLink) error {
 	log.Printf("saving new guest link %s", guestLink.ID)
 
-	if _, err := s.ctx.Exec(`
+	if _, err := s.db.Exec(`
 	INSERT INTO guest_links
 		(
 			id,
@@ -102,7 +103,7 @@ func (s *Store) InsertGuestLink(guestLink picoshare.GuestLink) error {
 func (s Store) DeleteGuestLink(id picoshare.GuestLinkID) error {
 	log.Printf("deleting guest link %s", id)
 
-	tx, err := s.ctx.BeginTx(context.Background(), nil)
+	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
@@ -139,7 +140,7 @@ func (s Store) DeleteGuestLink(id picoshare.GuestLinkID) error {
 func (s Store) DisableGuestLink(id picoshare.GuestLinkID) error {
 	log.Printf("disabling guest link %s", id)
 
-	_, err := s.ctx.Exec(`
+	_, err := s.db.Exec(`
     UPDATE
         guest_links
     SET
@@ -158,7 +159,7 @@ func (s Store) DisableGuestLink(id picoshare.GuestLinkID) error {
 func (s Store) EnableGuestLink(id picoshare.GuestLinkID) error {
 	log.Printf("enabling guest link %s", id)
 
-	_, err := s.ctx.Exec(`
+	_, err := s.db.Exec(`
 	UPDATE
 		guest_links
 	SET
@@ -201,6 +202,10 @@ func guestLinkFromRow(row rowScanner) (picoshare.GuestLink, error) {
 	if err != nil {
 		return picoshare.GuestLink{}, err
 	}
+	urlExpiration, err := picoshare.NewExpirationTime(uet)
+	if err != nil {
+		return picoshare.GuestLink{}, fmt.Errorf("failed to parse guest link expiration time from database: %w", err)
+	}
 
 	var fileLifetime picoshare.FileLifetime
 	if fileLifetimeRaw == nil {
@@ -220,7 +225,7 @@ func guestLinkFromRow(row rowScanner) (picoshare.GuestLink, error) {
 		MaxFileUploads:  maxFileUploads,
 		FilesUploaded:   filesUploaded,
 		Created:         ct,
-		UrlExpires:      picoshare.ExpirationTime(uet),
+		UrlExpires:      urlExpiration,
 		MaxFileLifetime: fileLifetime,
 	}, nil
 }

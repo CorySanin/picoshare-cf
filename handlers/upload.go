@@ -9,16 +9,11 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
+
 	"github.com/mtlynch/picoshare/handlers/parse"
 	"github.com/mtlynch/picoshare/picoshare"
-	"github.com/mtlynch/picoshare/random"
 	"github.com/mtlynch/picoshare/store"
 )
-
-const EntryIDLength = 10
-
-// Omit visually similar characters (I,l,1), (0,O)
-var entryIDCharacters = []rune("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
 
 type (
 	EntryPostResponse struct {
@@ -68,7 +63,7 @@ func (s Server) entryPost(chunkedUpload bool) http.HandlerFunc {
 
 func (s Server) entryPut() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := parseEntryID(mux.Vars(r)["id"])
+		id, err := picoshare.EntryIDFromString(mux.Vars(r)["id"])
 		if err != nil {
 			log.Printf("error parsing ID: %v", err)
 			http.Error(w, fmt.Sprintf("bad entry ID: %v", err), http.StatusBadRequest)
@@ -83,13 +78,13 @@ func (s Server) entryPut() http.HandlerFunc {
 			return
 		}
 
-		if err := s.getDB(r).UpdateEntryMetadata(id, metadata); err != nil {
+		if err := s.store.UpdateEntryMetadata(id, metadata); err != nil {
 			if _, ok := errors.AsType[store.EntryNotFoundError](err); ok {
 				http.Error(w, "Invalid entry ID", http.StatusNotFound)
 				return
 			}
 			log.Printf("error saving entry metadata: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to save new entry data: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to save new entry data", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -104,17 +99,26 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 			return
 		}
 
-		gl, err := s.getDB(r).GetGuestLink(guestLinkID)
-		if _, ok := errors.AsType[store.GuestLinkNotFoundError](err); ok {
-			http.Error(w, "Invalid guest link ID", http.StatusNotFound)
-			return
-		} else if err != nil {
-			log.Printf("error retrieving guest link with ID %v: %v", guestLinkID, err)
-			http.Error(w, "Failed to retrieve guest link", http.StatusInternalServerError)
-			return
+		gl, unlock, err := s.guestUploadOrchestrator.acquire(guestLinkID)
+		if err != nil {
+			if errors.Is(err, errParallelGuestUpload) {
+				// Prevent HTTP/1.1 from draining the rejected body before sending
+				// the error response.
+				w.Header().Set("Connection", "close")
+				http.Error(w, "This guest link does not allow you to perform multiple uploads at once", http.StatusConflict)
+				return
+			} else if _, ok := errors.AsType[store.GuestLinkNotFoundError](err); ok {
+				http.Error(w, "Invalid guest link ID", http.StatusNotFound)
+				return
+			} else {
+				log.Printf("error retrieving guest link with ID %v: %v", guestLinkID, err)
+				http.Error(w, "Failed to retrieve guest link", http.StatusInternalServerError)
+				return
+			}
 		}
+		defer unlock()
 
-		if !gl.IsActive() {
+		if !gl.IsActive(s.now()) {
 			http.Error(w, "Guest link is no longer active", http.StatusUnauthorized)
 			return
 		}
@@ -152,7 +156,9 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 			// and return plaintext.
 			w.Header().Set("Content-Type", "text/plain")
 			if _, err := fmt.Fprintf(w, "%s/-%s\r\n", baseURLFromRequest(r), id.String()); err != nil {
-				log.Fatalf("failed to write HTTP response: %v", err)
+				// Clients can disconnect before reading the response.
+				log.Printf("failed to write HTTP response for entry %s: %v", id.String(), err)
+				return
 			}
 		}
 	}
@@ -160,9 +166,10 @@ func (s Server) guestEntryPost(chunkedUpload bool) http.HandlerFunc {
 
 func (s Server) entryMetadataFromRequest(r *http.Request) (picoshare.UploadMetadata, error) {
 	var payload struct {
-		Filename   string `json:"filename"`
-		Expiration string `json:"expiration"`
-		Note       string `json:"note"`
+		Filename           string `json:"filename"`
+		Expiration         string `json:"expiration"`
+		Note               string `json:"note"`
+		DownloadPassphrase string `json:"downloadPassphrase"`
 	}
 	err := json.NewDecoder(r.Body).Decode(&payload)
 	if err != nil {
@@ -178,7 +185,7 @@ func (s Server) entryMetadataFromRequest(r *http.Request) (picoshare.UploadMetad
 	// Treat an empty expiration string as NeverExpire.
 	expiration := picoshare.NeverExpire
 	if payload.Expiration != "" {
-		expiration, err = parse.Expiration(payload.Expiration, s.clock.Now())
+		expiration, err = parse.Expiration(payload.Expiration, s.now())
 		if err != nil {
 			return picoshare.UploadMetadata{}, err
 		}
@@ -189,34 +196,21 @@ func (s Server) entryMetadataFromRequest(r *http.Request) (picoshare.UploadMetad
 		return picoshare.UploadMetadata{}, err
 	}
 
-	return picoshare.UploadMetadata{
-		Filename: filename,
-		Expires:  expiration,
-		Note:     note,
-	}, nil
-}
-
-func generateEntryID() picoshare.EntryID {
-	return picoshare.EntryID(random.String(EntryIDLength, entryIDCharacters))
-}
-
-func parseEntryID(s string) (picoshare.EntryID, error) {
-	if len(s) != EntryIDLength {
-		return picoshare.EntryID(""), fmt.Errorf("entry ID (%v) has invalid length: got %d, want %d", s, len(s), EntryIDLength)
-	}
-
-	// We could do this outside the function and store the result.
-	idCharsHash := map[rune]bool{}
-	for _, c := range entryIDCharacters {
-		idCharsHash[c] = true
-	}
-
-	for _, c := range s {
-		if _, ok := idCharsHash[c]; !ok {
-			return picoshare.EntryID(""), fmt.Errorf("entry ID (%s) contains invalid character: %v", s, c)
+	// An empty or missing passphrase removes the entry's download passphrase.
+	downloadPassphrase := picoshare.DownloadPassphrase{}
+	if payload.DownloadPassphrase != "" {
+		downloadPassphrase, err = picoshare.NewDownloadPassphrase(payload.DownloadPassphrase)
+		if err != nil {
+			return picoshare.UploadMetadata{}, err
 		}
 	}
-	return picoshare.EntryID(s), nil
+
+	return picoshare.UploadMetadata{
+		Filename:           filename,
+		Expires:            expiration,
+		Note:               note,
+		DownloadPassphrase: downloadPassphrase,
+	}, nil
 }
 
 func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.ExpirationTime, guestLinkID picoshare.GuestLinkID, chunkedUpload bool) (picoshare.EntryID, error) {
@@ -224,7 +218,7 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 	// limit to avoid exhausting RAM on servers with limited resources.
 	multipartMaxMemory := mibToBytes(1)
 	if err := r.ParseMultipartForm(multipartMaxMemory); err != nil {
-		return picoshare.EntryID(""), err
+		return picoshare.EntryID{}, err
 	}
 	defer func() {
 		if err := r.MultipartForm.RemoveAll(); err != nil {
@@ -234,12 +228,12 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 
 	reader, metadata, err := r.FormFile("file")
 	if err != nil {
-		return picoshare.EntryID(""), err
+		return picoshare.EntryID{}, err
 	}
 
 	fileSize, err := picoshare.FileSizeFromInt64(metadata.Size)
 	if err != nil {
-		return picoshare.EntryID(""), err
+		return picoshare.EntryID{}, err
 	}
 
 	var incomingFilename string
@@ -254,41 +248,52 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 
 	filename, err := parse.Filename(incomingFilename)
 	if err != nil {
-		return picoshare.EntryID(""), err
+		return picoshare.EntryID{}, err
 	}
 
 	contentType, err := parseContentType(incomingContentType)
 	if err != nil {
-		return picoshare.EntryID(""), err
+		return picoshare.EntryID{}, err
 	}
 
 	note, err := parse.FileNote(r.FormValue("note"))
 	if err != nil {
-		return picoshare.EntryID(""), err
+		return picoshare.EntryID{}, err
 	}
 
 	if guestLinkID != "" && note.Value != nil {
-		return picoshare.EntryID(""), errors.New("guest uploads cannot have file notes")
+		return picoshare.EntryID{}, errors.New("guest uploads cannot have file notes")
+	}
+
+	downloadPassphrase := picoshare.DownloadPassphrase{}
+	if rawDownloadPassphrase := r.FormValue("downloadPassphrase"); rawDownloadPassphrase != "" {
+		if guestLinkID != "" {
+			return picoshare.EntryID{}, errors.New("guest uploads cannot have download passphrases")
+		}
+		downloadPassphrase, err = picoshare.NewDownloadPassphrase(rawDownloadPassphrase)
+		if err != nil {
+			return picoshare.EntryID{}, err
+		}
 	}
 
 	var id picoshare.EntryID
 	if chunkedUpload {
-		id = picoshare.EntryID(r.FormValue("id"))
-		if id.String() == "" {
-			id = generateEntryID()
+		id, err = picoshare.EntryIDFromString(r.FormValue("id"))
+		if id.String() == "" || err != nil {
+			id = picoshare.NewEntryID()
 		}
 
-		err = s.getDB(r).UploadChunk(reader, id)
+		err = s.store.UploadChunk(reader, id)
 		if err != nil {
 			log.Printf("failed to save chunk: %v", err)
-			return picoshare.EntryID(""), dbError{err}
+			return picoshare.EntryID{}, dbError{err}
 		}
 
 		if r.FormValue("last") == "0" {
 			return id, nil
 		}
 	} else {
-		id = generateEntryID()
+		id = picoshare.NewEntryID()
 	}
 
 	entryMetadata := picoshare.UploadMetadata{
@@ -299,22 +304,22 @@ func (s Server) insertFileFromRequest(r *http.Request, expiration picoshare.Expi
 		GuestLink: picoshare.GuestLink{
 			ID: guestLinkID,
 		},
-		Uploaded: s.clock.Now(),
-		Expires:  expiration,
-		Size:     fileSize,
+		Uploaded:           s.now(),
+		Expires:            expiration,
+		Size:               fileSize,
+		DownloadPassphrase: downloadPassphrase,
 	}
 
 	if chunkedUpload {
-		err = s.getDB(r).InsertChunkedEntry(reader,
+		err = s.store.InsertChunkedEntry(reader,
 			entryMetadata)
 	} else {
-		err = s.getDB(r).InsertEntry(reader,
+		err = s.store.InsertEntry(reader,
 			entryMetadata)
 	}
 
 	if err != nil {
-		log.Printf("failed to save entry: %v", err)
-		return picoshare.EntryID(""), dbError{err}
+		return picoshare.EntryID{}, &dbError{err}
 	}
 
 	return id, nil
@@ -327,7 +332,7 @@ func parseContentType(s string) (picoshare.ContentType, error) {
 }
 
 func (s Server) parseExpirationFromRequest(r *http.Request) (picoshare.ExpirationTime, error) {
-	return parse.Expiration(r.URL.Query().Get("expiration"), s.clock.Now())
+	return parse.Expiration(r.URL.Query().Get("expiration"), s.now())
 }
 
 func (s Server) parseGuestExpirationFromRequest(r *http.Request, gl picoshare.GuestLink) (picoshare.ExpirationTime, error) {
@@ -337,19 +342,22 @@ func (s Server) parseGuestExpirationFromRequest(r *http.Request, gl picoshare.Gu
 	// or a command-line utility), default to the maximum allowed expiration for
 	// this guest link.
 	if expirationParam == "" {
-		return gl.MaxFileLifetime.ExpirationFromTime(s.clock.Now()), nil
+		return gl.MaxFileLifetime.ExpirationFromTime(s.now())
 	}
 
-	requestedExpiration, err := parse.Expiration(expirationParam, s.clock.Now())
+	requestedExpiration, err := parse.Expiration(expirationParam, s.now())
 	if err != nil {
 		return picoshare.ExpirationTime{}, err
 	}
 
 	// Validate that the requested expiration doesn't exceed the guest link's maximum.
-	maxPermittedExpiration := gl.MaxFileLifetime.ExpirationFromTime(s.clock.Now())
+	maxPermittedExpiration, err := gl.MaxFileLifetime.ExpirationFromTime(s.now())
+	if err != nil {
+		return picoshare.ExpirationTime{}, fmt.Errorf("failed to calculate guest link expiration limit: %w", err)
+	}
 
 	// If the requested expiration is beyond the guest link's maximum, reject it.
-	if requestedExpiration.Time().After(maxPermittedExpiration.Time()) {
+	if requestedExpiration.After(maxPermittedExpiration) {
 		return picoshare.ExpirationTime{},
 			fmt.Errorf("requested expiration time of %v is beyond guest link's limit: %v",
 				requestedExpiration,

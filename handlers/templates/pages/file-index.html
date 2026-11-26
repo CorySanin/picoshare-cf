@@ -54,7 +54,7 @@
           .then(() =>
             document
               .querySelector("snackbar-notifications")
-              .addInfoMessage("Copied link")
+              .addInfoMessage("Copied link"),
           )
           .catch((error) => {
             document.getElementById("error-message").innerText = error;
